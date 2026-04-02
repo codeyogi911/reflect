@@ -1,8 +1,12 @@
 # Reflect
 
-**The repo oracle that answers "why," backed by Entire session evidence.**
+**Portable, repo-owned memory for AI coding agents.**
 
-Your repo has amnesia. Git remembers *what* changed — nobody remembers *why*. Entire CLI captures and checkpoints your coding sessions. `/reflect` is the oracle that reads from that evidence to answer questions: why was this decision made, what failed before, and what does the AI need to know right now.
+AI agents have memory — but it's machine-local and vendor-specific. Claude's memory lives under `~/.claude/projects/` on your laptop. Cursor's lives somewhere else. Switch machines, switch agents, onboard a teammate — the memory doesn't travel.
+
+`/reflect` solves this by putting memory where it belongs: **in the repo**. Decisions, failure patterns, and working context are stored as structured Markdown in `.reflect/`, versioned with git, reviewable in PRs, and readable by any compliant agent. Entire CLI captures the evidence; `/reflect` interprets it.
+
+**Claude remembers for Claude. `.reflect/` remembers for the project.**
 
 Works with **Claude Code** and **Cursor**. Requires [Entire CLI](https://entire.io) for session capture.
 
@@ -14,7 +18,7 @@ Session → Entire CLI captures → /reflect interprets → .reflect/ evidence s
 
 1. **Entire CLI** captures your coding sessions (Claude Code + Cursor) — this is the evidence substrate
 2. `/reflect` interprets transcripts: extracts decisions, patterns, and insights from that evidence
-3. Interpretations are stored in `.reflect/` — structured, git-friendly, human-readable
+3. Interpretations are stored in `.reflect/` — structured, git-portable, agent-agnostic
 4. A **compiled briefing** (`.reflect/context.md`) is generated with the most relevant current context
 5. Optionally reference `@.reflect/context.md` from your `CLAUDE.md` as supplementary context
 

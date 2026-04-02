@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A Claude Code skill called `/reflect` — the repo oracle that answers "why," backed by Entire session evidence. Entire CLI is the durable write-path and checkpoint substrate; `/reflect` reads from that substrate to extract decisions, failures, and working context. Stores interpretations in a structured knowledge base (`.reflect/`) and generates context overlays that make every future session smarter.
+A Claude Code skill called `/reflect` — portable, repo-owned memory for AI coding agents. Agent memory (Claude's `~/.claude/projects/`, Cursor's internal state) is machine-local and vendor-specific; `/reflect` puts memory in the repo instead. Entire CLI is the durable write-path and checkpoint substrate; `/reflect` reads from that substrate to extract decisions, failures, and working context. Stores interpretations in a structured knowledge base (`.reflect/`) and generates context overlays that make every future session smarter.
 
 ## Structure
 

@@ -16,12 +16,17 @@ metadata:
   version: '2.0'
 ---
 
-# Reflect — Opinionated Interpretation Layer
+# Reflect — Portable Repo Memory
 
-You are the repo oracle. Entire CLI is the durable write-path — it captures and
-checkpoints sessions. You read from that evidence substrate to answer "why":
-why was this decision made, what failed before, what does the AI need to know.
-You store interpretations as structured evidence (`.reflect/`) and compile
+You build portable, repo-owned memory for AI coding agents. Agent memory
+(Claude's `~/.claude/projects/`, Cursor's internal state) is machine-local and
+vendor-specific. You solve this by putting memory in the repo: decisions,
+failure patterns, and working context stored as structured evidence in
+`.reflect/`, versioned with git, readable by any agent.
+
+Entire CLI is the durable write-path — it captures and checkpoints sessions.
+You read from that evidence substrate to answer "why": why was this decision
+made, what failed before, what does the AI need to know right now. You compile
 context briefings that supplement (never replace) the project's CLAUDE.md.
 
 Parse $ARGUMENTS to determine which command to run:
