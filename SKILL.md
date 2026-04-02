@@ -72,15 +72,12 @@ For the default Analyze command, further parse remaining $ARGUMENTS:
    ```bash
    entire status
    ```
-   If the output indicates the repository is not initialized or enabled
-   (e.g., "not configured", "not enabled", or an error exit code) →
-   run `entire enable` to set it up. Report: "Entire is now set up! Run
-   some coding sessions, then come back to `/reflect` to analyze them."
-   and stop.
+   If not configured → run `entire enable` to set it up. Report: "Entire is
+   now set up! Run some coding sessions, then come back to `/reflect` to
+   analyze them." and stop.
 
-   If configured but the output shows zero sessions → report "No session
-   history available yet. Run some sessions first, then come back to
-   reflect." and stop.
+   If configured but has no sessions → report "No session history available
+   yet. Run some sessions first, then come back to reflect." and stop.
 
 3. Ensure the `.reflect/` knowledge store exists:
    ```bash
@@ -434,12 +431,12 @@ via `@.reflect/context.md`. This is a generated overlay, not a source of truth.
 
 ---
 
-## Command: Status
+## Command: Status (lightweight)
 
 **Usage**: `/reflect status`
 
-Dashboard of the evidence store — artifact counts, freshness health, and
-actionable items.
+Quick summary of the evidence store. Keep this simple — just counts and
+actionable items, not a full dashboard.
 
 ### Steps:
 
@@ -450,31 +447,9 @@ actionable items.
    ls .reflect/insights/*.md 2>/dev/null | wc -l
    ```
 
-2. Read all `.reflect/insights/*.md` and calculate freshness for each:
-   - Parse `last_seen` and `relevance_type` from frontmatter.
-   - Calculate freshness: `2^(-(days_since_last_seen / half_life_days))`.
-     Use half_life_days = 365 for `architectural`, 60 for `temporal`.
-   - Bucket each insight: **fresh** (freshness ≥ 0.7), **aging** (0.3–0.7),
-     **stale** (< 0.3).
-
-3. Identify action items:
-   - **Unbaked HIGHs**: HIGH confidence insights where `baked` is not true.
-   - **Promotion candidates**: MEDIUM confidence insights seen 2+ times
-     (candidates for promotion to HIGH).
-   - **Archival candidates**: insights with freshness below 0.3 (stale).
-
-4. Check `context.md` last-modified date:
-   ```bash
-   stat -c %y .reflect/context.md 2>/dev/null || echo "not yet generated"
-   ```
-
-5. Present:
+2. Present:
    > **Evidence Store**: N sessions, N decisions, N insights
-   > **Freshness**: N fresh, N aging, N stale
-   > **Action items**:
-   >   - Unbaked HIGH insights: N
-   >   - Promotion candidates: N
-   >   - Archival candidates: N
+   > **Unbaked HIGH insights**: N
    > **Context briefing**: last updated <date or "not yet generated">
 
 ---
@@ -489,8 +464,8 @@ Simple grep across the evidence store — not a semantic search engine.
 
 1. Extract the search query from $ARGUMENTS.
 
-2. Grep across `.reflect/sessions/`, `.reflect/decisions/`, `.reflect/insights/`,
-   and `.reflect/files/` for the query.
+2. Grep across `.reflect/sessions/`, `.reflect/decisions/`, and `.reflect/insights/`
+   for the query.
 
 3. Read matched files and present the top 10 most relevant results with type
    labels and brief excerpts.
