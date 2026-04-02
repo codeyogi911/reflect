@@ -26,3 +26,8 @@ A Claude Code skill called `/reflect` that analyzes session transcripts captured
   ```
 - Invoke with `/reflect` in any project with Entire CLI sessions to test
 - The skill reads templates at runtime, so changes to templates/ take effect immediately when symlinked
+
+## Session Insights
+
+- When writing code that shells out to external CLIs or APIs, verify available commands/endpoints with `--help` or reference docs before implementation — don't assume command signatures.
+- For changes that affect core architecture (learning mechanism, data flow, required dependencies), confirm the design decision (optional vs required, additive vs replacement) with the user before implementing.
