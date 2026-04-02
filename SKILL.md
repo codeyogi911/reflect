@@ -2,13 +2,14 @@
 name: self-improving-agents
 description: >
   Scaffold a self-improving agentic harness into any project. Creates
-  orchestrator, builder, verifier, e2e-tester, and researcher agents with
-  iterative build loops, two-gate verification, gap tracking, and cross-session
-  learning. Use when: user asks to set up self-improving agents, create an agent
-  harness, add build loops, scaffold agent infrastructure, wants agents that
-  learn from mistakes, or wants an iterative build-verify-test workflow.
-  Also trigger when user mentions "build loop", "agent harness", "self-improving",
-  or wants to add structured agent coordination to their project.
+  orchestrator, builder, verifier, e2e-tester, researcher, and session-analyzer
+  agents with iterative build loops, two-gate verification, gap tracking, and
+  Entire.io-driven learning. Use when: user asks to set up self-improving agents,
+  create an agent harness, add build loops, scaffold agent infrastructure, wants
+  agents that learn from session transcripts, or wants an iterative
+  build-verify-test workflow. Also trigger when user mentions "build loop",
+  "agent harness", "self-improving", or wants to add structured agent
+  coordination to their project.
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep, Agent, WebSearch, WebFetch
 metadata:
   author: shashwatjain
@@ -61,6 +62,7 @@ what the project actually is:
 - **orchestrator** — every harness needs coordination
 - **builder** — every project has code to write
 - **verifier** — every project benefits from review
+- **session-analyzer** — mines Entire session transcripts for agent improvement
 
 **Create only if relevant:**
 - **e2e-tester** — only if the project has user-facing surfaces:
@@ -73,7 +75,6 @@ what the project actually is:
   - YES: apps using external APIs, projects with multiple frameworks,
     unfamiliar tech stacks, large codebases
   - NO: small single-file utilities, projects where everything is self-contained
-
 **Consider creating project-specific agents** when the project has a clear
 specialized need that none of the standard agents cover. Examples:
 - **api-tester** for API-only projects (replaces e2e-tester with focused API
@@ -84,7 +85,7 @@ specialized need that none of the standard agents cover. Examples:
 
 Use the templates as a starting point, but adapt the role and instructions to
 match the actual need. Give custom agents the same structure: Process section,
-Output format, `## Project-Specific Rules`, `## Learnings`.
+Output format, `## Project-Specific Rules`.
 
 ### Detect Existing Harness
 
@@ -102,7 +103,7 @@ Output format, `## Project-Specific Rules`, `## Learnings`.
    → Full scaffolding with deep customization (Steps 2-5)
 
    **B. Our harness already installed** — `.claude/agents/` has files matching
-   our structure (`## Project-Specific Rules`, `## Learnings` sections)
+   our structure (`## Project-Specific Rules` sections)
    → **Upgrade**: preserve all accumulated knowledge, refresh core instructions
 
    **C. Different agents exist** — `.claude/agents/` has agent files that
@@ -128,6 +129,33 @@ Output format, `## Project-Specific Rules`, `## Learnings`.
 ```bash
 mkdir -p .claude/agents
 ```
+
+---
+
+## Step 2.5: Configure Entire Telemetry
+
+Entire.io captures session transcripts into checkpoint branches — this is how
+agents learn. It is required for the self-improvement loop.
+
+1. Run `which entire` or check if `~/.local/bin/entire` exists
+2. If NOT found → tell the user: "Entire.io CLI is required for session-based
+   agent learning. Install it from https://entire.io and re-run." Stop here.
+3. If found → **ask the user**: "Entire.io detected. Ready to configure session
+   telemetry for this project?"
+4. If user says **yes**:
+   a. Check if `.entire/settings.json` already exists → skip configuration,
+      Entire is already set up
+   b. If not configured: run `entire configure --agent claude-code --telemetry=false`
+   c. Verify `.claude/settings.json` has the deny permission:
+      `Read(./.entire/metadata/**)`
+      - If `permissions.deny` array exists, append to it if missing
+      - If not, create the deny array with this entry
+   d. Add `.entire/` to `.gitignore` if not already present
+5. If user says **no** → explain that Entire is needed for agent learning and
+   ask if they'd like to proceed without the self-improvement loop
+
+Do NOT modify existing hooks or MCP servers in settings.json — only ADD the
+Entire hooks if they are missing.
 
 ---
 
@@ -180,12 +208,11 @@ then tailor it:
 
 For each of our 5 agents:
 1. Read the existing `.claude/agents/{agent}.md`
-2. Extract everything under `## Project-Specific Rules` and `## Learnings`
+2. Extract everything under `## Project-Specific Rules`
 3. Also extract any project-specific customizations that were added to core
    sections (test commands, directory conventions, framework checks, etc.)
 4. Read the latest template from `templates/{agent}.md`
-5. Write the new template, re-applying ALL extracted customizations, rules,
-   and learnings
+5. Write the new template, re-applying ALL extracted customizations and rules
 6. Do NOT touch custom agent files that aren't part of our standard 5
 
 ### Scenario C — Fuse: Best of Both Worlds
@@ -195,7 +222,7 @@ unified agent that combines:
 - **Their project knowledge**: custom instructions, conventions, domain expertise,
   accumulated learnings — things that took real sessions to figure out
 - **Our structured workflow**: the build loop, output formats, retry protocol,
-  two-gate verification, self-improvement system (learnings + bake-in)
+  two-gate verification, Entire-driven self-improvement system
 
 **Fusion process for each overlapping agent:**
 
@@ -210,16 +237,15 @@ unified agent that combines:
    - Keeps their core instructions and project knowledge as the foundation
    - Adds our structured sections: Output format, On Retry (builder), Gates
      (verifier), failure classification (e2e-tester)
-   - Adds `## Project-Specific Rules` and `## Learnings` sections for the
-     self-improvement system
+   - Adds `## Project-Specific Rules` section for the self-improvement system
    - Integrates with the orchestrator's state machine (uses our status codes:
      COMPLETE, NEEDS_CLARIFICATION, BLOCKED, APPROVED, CHANGES_REQUIRED, etc.)
 5. Tell the user what you fused and what each side contributed
 
 **For agents with no overlap** (custom agents like `deployer.md`, `michael.md`):
 - Don't touch them
-- Add `## Project-Specific Rules` and `## Learnings` sections to them so
-  they can participate in the self-improvement system
+- Add `## Project-Specific Rules` section to them so they can participate
+  in the self-improvement system
 - Register them in the orchestrator's Startup Protocol
 
 **For our agents with no collision** (e.g., project has no verifier):
@@ -234,6 +260,7 @@ unified agent that combines:
 | `templates/verifier.md` | Always | Two-gate review: spec compliance then code quality |
 | `templates/e2e-tester.md` | If project has user-facing surfaces | End-to-end testing, failure classification |
 | `templates/researcher.md` | If complex deps or large codebase | Pre-build investigation of APIs, patterns, docs |
+| `templates/session-analyzer.md` | Always | Mines Entire session transcripts for data-driven agent improvement |
 
 ---
 
@@ -271,16 +298,17 @@ State files: `.claude/gaps.md` (blockers/decisions), `.claude/progress.md` (task
 ### Usage
 - Start a build loop: "Use the orchestrator to build [goal]"
 - Continue where you left off: "Use the orchestrator to continue"
-- Bake learnings into agents: "Evolve the agents"
+- Evolve agents from session data: "Evolve the agents"
+- Analyze past sessions: "Analyze session history"
 - Check open blockers: "Read .claude/gaps.md"
 - Check progress: "Read .claude/progress.md"
 
 ### How It Works
-1. Orchestrator reads agent learnings + state files, then decomposes goal into tasks
+1. Orchestrator reads agent rules + state files, then decomposes goal into tasks
 2. Each task cycles: RESEARCH? → BUILD → VERIFY → TEST with up to 3 retries
 3. After 3 failures on a task, the orchestrator escalates to you with options
-4. After each cycle, agents capture raw learnings in ## Learnings sections
-5. After each build loop, the EVOLVE phase bakes validated learnings into agent instructions
+4. Entire captures full session transcripts into checkpoint branches
+5. After each build loop, the EVOLVE phase mines session transcripts and bakes improvements into agent instructions
 6. Gaps and progress persist across sessions — the harness picks up where it left off
 ```
 
@@ -295,7 +323,8 @@ State files: `.claude/gaps.md` (blockers/decisions), `.claude/progress.md` (task
 4. Show usage examples:
    - `Use the orchestrator to build [goal]`
    - `Use the orchestrator to continue`
-   - `Evolve the agents` (bake validated learnings into agent instructions)
+   - `Evolve the agents` (mine session transcripts and bake improvements into agents)
    - `Read .claude/gaps.md`
 5. If $ARGUMENTS was provided: "Ready to start the first build loop with goal: **$ARGUMENTS**?"
 6. If $ARGUMENTS was empty: "What would you like the agents to build?"
+7. Confirm Entire is configured and session telemetry is active

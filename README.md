@@ -2,7 +2,7 @@
 
 **A Claude Code skill that gives your project agents that learn from every build cycle.**
 
-Invoke `/self-improving-agents` in any project and get a full agentic harness — an orchestrator that decomposes goals into tasks, a builder that writes code, a verifier that catches bugs before they ship, a tester that validates user flows, and a researcher that investigates before building. After each cycle, agents record what went wrong and what to do differently — and those learnings persist across sessions.
+Invoke `/self-improving-agents` in any project and get a full agentic harness — an orchestrator that decomposes goals into tasks, a builder that writes code, a verifier that catches bugs before they ship, a tester that validates user flows, a researcher that investigates before building, and a session-analyzer that mines Entire.io transcripts to make agents smarter after every session.
 
 ## Why This Exists
 
@@ -10,7 +10,7 @@ Claude Code is powerful, but complex projects need more than a single prompt. Yo
 
 - **Structured loops** — build, verify, test, retry until quality gates pass
 - **Separation of concerns** — the code writer shouldn't review its own work
-- **Memory across sessions** — don't rediscover the same issues every time
+- **Evidence-based learning** — session transcripts drive agent improvement, not self-reporting
 - **Human escalation** — agents should ask when stuck, not guess
 - **Project-aware agents** — not generic templates, but agents that know *your* codebase
 
@@ -27,8 +27,9 @@ ANALYZE → PLAN → [RESEARCH? → BUILD → VERIFY → TEST → REFLECT]* → 
 1. **Orchestrator** decomposes your goal into ordered tasks
 2. Each task cycles through BUILD → VERIFY (two-gate review) → TEST
 3. Failed tasks retry up to 3 times, then escalate to you with context and options
-4. After each cycle, agents append learnings to their own files
-5. Open gaps and task progress persist across sessions
+4. Entire captures full session transcripts into checkpoint branches
+5. After each loop, the EVOLVE phase mines transcripts and bakes improvements into agents
+6. Open gaps and task progress persist across sessions
 
 ## Install
 
@@ -88,7 +89,8 @@ your-project/
     │   ├── builder.md         — Writes code, runs tests
     │   ├── verifier.md        — Two-gate code review (spec + quality)
     │   ├── e2e-tester.md      — End-to-end testing, failure classification
-    │   └── researcher.md      — Pre-build investigation
+    │   ├── researcher.md      — Pre-build investigation
+    │   └── session-analyzer.md — Mines Entire transcripts for agent improvement
     ├── gaps.md                — Cross-session blocker and decision tracker
     └── progress.md            — Task completion and session log
 ```
@@ -102,43 +104,31 @@ your-project/
 | **Verifier** | Gate 1: spec compliance (missing/extra/wrong). Gate 2: code quality (security, edge cases, tests). Never approves CRITICAL issues |
 | **E2E Tester** | Detects existing test infrastructure, writes targeted tests, classifies failures as app bug vs test bug vs environment |
 | **Researcher** | Investigates codebases and docs before building. Cites sources. Reduces ambiguity that would waste build cycles |
+| **Session Analyzer** | Mines Entire.io session transcripts during EVOLVE phase. Finds retry loops, research gaps, escalation patterns. Produces improvement signals for bake-in |
 
-## Self-Improvement: Two-Tier System
+## Self-Improvement: Entire-Driven Learning
 
-Most "learning" systems just append notes to a file. That's tier 1. The real power is **tier 2: bake-in** — where validated learnings get rewritten into the agent's core instructions, then removed from the learnings list.
+Agents don't self-report what they learned — that's unreliable. Instead, [Entire.io](https://entire.io) captures full session transcripts (prompts, tool use, responses, retries) into checkpoint branches. A **session-analyzer** agent mines these transcripts to find real patterns — retry loops, research gaps, verification ping-pong, escalation resolutions — and produces actionable improvement signals.
 
-### Tier 1: Capture
+### How It Works
 
-After each build cycle, agents append structured learnings:
+After each build loop, the orchestrator runs an **EVOLVE** phase:
 
-```markdown
-### 2026-04-01 — auth middleware refactor
-- OBSERVATION: Unit tests passed but e2e failed because session cookie wasn't set
-- INSIGHT: Auth changes need both unit and e2e coverage — they touch the full request lifecycle
-- ACTION: When modifying auth, always add an e2e test for the full login→action→logout flow
-- STATUS: raw
-```
+1. The session-analyzer uses `entire explain` CLI to access recent session transcripts
+2. It identifies patterns: which agents struggled, where retries happened, what the human had to fix
+3. Patterns confirmed across 2+ sessions become **bake-in candidates**
+4. The orchestrator **rewrites agent core instructions** to incorporate validated patterns
+5. The agent now does the right thing automatically — no notes to re-read
 
-### Tier 2: Bake-In
+For example, if transcripts show the builder repeatedly triggering retry loops when editing auth middleware (because it only ran single-file tests), the EVOLVE phase edits `builder.md`'s Process section to add "run the full auth test suite after any auth change." The pattern disappears because the agent learned.
 
-After each build loop completes, the orchestrator runs an **EVOLVE** phase:
+Each agent file has a `## Project-Specific Rules` section at the bottom — this is where baked-in improvements live as permanent instructions.
 
-1. Reviews all learnings across agent files
-2. Identifies candidates: confirmed across 2+ sessions, or caused significant rework
-3. **Rewrites the agent's core instructions** to incorporate the insight
-4. Removes the learning entry — it's now part of the agent's DNA
-
-For example, if the builder keeps learning "run full auth tests after middleware changes", the EVOLVE phase edits `builder.md`'s Process section to add that as a permanent step. The learning disappears because the agent now does it automatically.
-
-Each agent file has two sections at the bottom:
-- **Project-Specific Rules** — baked-in learnings that are now permanent instructions
-- **Learnings** — raw observations waiting to be validated
-
-You can also trigger evolution manually: `"Evolve the agents"` or `"Bake in the learnings"`.
+You can trigger evolution manually: `"Evolve the agents"` or `"Analyze session history"`.
 
 ### Why This Matters
 
-- **Context efficiency** — agents don't re-read a growing list of notes every run
+- **Evidence-based** — improvements come from real transcript data, not agent self-assessment
 - **Genuine improvement** — the agent's actual behavior changes, not just its reading list
 - **Compounding returns** — each session makes the next one faster and more reliable
 
@@ -155,11 +145,28 @@ The skill detects what's already in your `.claude/` directory and adapts:
 
 When fusing, the skill reads both your agent and our template, identifies what each brings (your project knowledge vs our build loop structure), and creates a unified agent that's better than either alone. Custom agents (deployer, domain experts, etc.) are never touched — they get registered with the orchestrator so it can dispatch to them.
 
+## Entire.io Requirement
+
+The harness requires [Entire.io](https://entire.io) for session capture. During scaffolding, the skill configures Entire hooks in `.claude/settings.json` that fire on session lifecycle events (start, end, task checkpoints). These hooks capture full conversation transcripts into checkpoint branches — the raw data that powers agent improvement.
+
+### Setup
+
+The `entire` CLI must be installed before scaffolding. The skill will detect it and configure hooks automatically (with your confirmation). If Entire is not found, the skill will prompt you to install it.
+
+### What Gets Captured
+
+- Full conversation transcripts (prompts, tool use, responses)
+- Session lifecycle events (start, end, phase transitions)
+- Task-level checkpoints with file change counts
+- Token usage and model information
+
+Agents cannot read `.entire/metadata/` during live work (deny permission). Transcript analysis only happens during the EVOLVE phase via the `entire explain` CLI.
+
 ## Key Design Decisions
 
 - **Project-aware from day 1** — Agents are customized to your codebase, not generic templates
 - **Fusion over replacement** — Existing agents get merged, not overwritten
-- **Two-tier self-improvement** — Learnings captured raw, then baked into agent DNA when validated
+- **Entire-driven self-improvement** — Session transcripts mined for patterns, validated ones baked into agent instructions
 - **Two-gate verification** — Spec compliance before code quality (don't optimize wrong code)
 - **Escalation over guessing** — 3 failures → ask the human with context and options
 - **Research-first** — Dedicated research step prevents building on assumptions

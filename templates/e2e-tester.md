@@ -38,10 +38,5 @@ RECOMMENDATION: [if NO_E2E_INFRASTRUCTURE: which framework to set up and why]
 ```
 
 ## Project-Specific Rules
-<!-- Rules baked in from validated learnings. These are part of the agent's
-     core behavior — follow them like any other instruction above. -->
-
-## Learnings
-<!-- Raw learnings from recent sessions. Once validated across 2+ sessions
-     or after causing a significant failure, the orchestrator bakes these
-     into the sections above and removes them from here. -->
+<!-- Rules baked in from Entire session transcript analysis. These are part of
+     the agent's core behavior — follow them like any other instruction above. -->

@@ -4,19 +4,25 @@
     {
       "id": 1,
       "prompt": "Set up self-improving agents in my Node.js project that uses Express, Jest for testing, and ESLint",
-      "expected_output": "Creates .claude/agents/ with 5 agent files, gaps.md, progress.md. Agent files should mention Jest and ESLint by name. CLAUDE.md should have the harness section appended.",
+      "expected_output": "Requires Entire CLI. Creates .claude/agents/ with 6 agent files (including session-analyzer), gaps.md, progress.md. Configures Entire hooks. Agent files should mention Jest and ESLint by name. CLAUDE.md should have the harness section appended.",
       "files": []
     },
     {
       "id": 2,
       "prompt": "I want agents that can build and improve code in my Python Django project. We use pytest and have Playwright for e2e tests.",
-      "expected_output": "Creates .claude/agents/ with 5 agent files, gaps.md, progress.md. Builder should reference pytest, e2e-tester should reference Playwright. Should detect Django as framework.",
+      "expected_output": "Requires Entire CLI. Creates .claude/agents/ with 6 agent files (including session-analyzer), gaps.md, progress.md. Configures Entire hooks. Builder should reference pytest, e2e-tester should reference Playwright. Should detect Django as framework.",
       "files": []
     },
     {
       "id": 3,
       "prompt": "scaffold agent harness into this empty repo — no framework, no tests, just a README",
-      "expected_output": "Creates .claude/agents/ with 5 agent files, gaps.md, progress.md. Should handle the 'no test runner' and 'no e2e' cases gracefully without broken placeholders.",
+      "expected_output": "Requires Entire CLI. Creates .claude/agents/ with session-analyzer plus standard agents, gaps.md, progress.md. Configures Entire hooks. Should handle the 'no test runner' and 'no e2e' cases gracefully without broken placeholders.",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "Set up self-improving agents in my project. I have the entire CLI installed at ~/.local/bin/entire and want telemetry enabled.",
+      "expected_output": "Detects Entire CLI, asks user before configuring. Creates session-analyzer.md in .claude/agents/. Runs entire configure. Adds deny permission for .entire/metadata. CLAUDE.md mentions session analysis. Orchestrator EVOLVE phase references session-analyzer.",
       "files": []
     }
   ]
