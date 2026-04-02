@@ -8,6 +8,7 @@ Filename convention: `<NNNN>-<slug>.md` (e.g., `0001-auth-strategy.md`)
 
 ```markdown
 ---
+schema_version: "1.0"
 id: "<NNNN>"
 title: <Short decision title>
 date: <YYYY-MM-DD>

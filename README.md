@@ -134,6 +134,8 @@ After running `/reflect`, your project gets a `.reflect/` directory:
 
 Everything is plain Markdown with YAML frontmatter — git-friendly, human-readable, diffable.
 
+See [`SPEC.md`](SPEC.md) for the full, agent-agnostic format specification — useful if you're building a tool that reads from or writes to `.reflect/`.
+
 ## Context Briefing
 
 `/reflect` compiles a context briefing from the evidence store — a filtered, prioritized summary of what the AI needs to know for the current state of the project.
@@ -205,6 +207,16 @@ Commit the typed records (`.reflect/sessions/`, `.reflect/decisions/`, `.reflect
 
 **Q: What if I want to edit knowledge artifacts?**
 They're plain markdown. Edit them directly — `/reflect` will respect your changes on the next run.
+
+## For Tool Authors
+
+The `.reflect/` evidence store is an open format. If you're building an AI coding tool, editor plugin, or session capture system, see [`SPEC.md`](SPEC.md) for the full specification. A compliant tool can:
+
+- **Read** from `.reflect/` to give agents project context at session start
+- **Write** to `.reflect/` to capture decisions, patterns, and insights from sessions
+- **Generate** `context.md` as a compiled briefing for any agent
+
+The spec is independent of `/reflect` the skill — it defines the contract for the evidence store itself.
 
 ## Contributing
 

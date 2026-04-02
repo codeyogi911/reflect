@@ -9,6 +9,7 @@ Example: `src/auth/middleware.ts` → `src--auth--middleware.ts.md`
 
 ```markdown
 ---
+schema_version: "1.0"
 file: <original/file/path>
 last_updated: <YYYY-MM-DD>
 sessions: [<session-id>, ...]

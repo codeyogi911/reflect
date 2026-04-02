@@ -8,6 +8,7 @@ Filename convention: `YYYY-MM-DD_<session-id>.md`
 
 ```markdown
 ---
+schema_version: "1.0"
 session_id: <session-id>
 date: <ISO-8601 timestamp>
 branch: <git branch>

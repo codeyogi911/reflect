@@ -8,6 +8,7 @@ Filename convention: `<slug>.md` (e.g., `always-check-cli-help.md`)
 
 ```markdown
 ---
+schema_version: "1.0"
 id: <slug>
 title: <Short actionable title>
 confidence: <LOW | MEDIUM | HIGH>
