@@ -22,19 +22,19 @@ Run `/reflect` after a few coding sessions and get structured analysis of what w
 ### Symlink (recommended for development)
 
 ```bash
-git clone https://github.com/shashwatjain/self-improving-agents.git
+git clone https://github.com/codeyogi911/reflect.git
 mkdir -p ~/.claude/skills/reflect
-ln -sf "$(pwd)/self-improving-agents/SKILL.md" ~/.claude/skills/reflect/SKILL.md
-ln -sf "$(pwd)/self-improving-agents/templates" ~/.claude/skills/reflect/templates
+ln -sf "$(pwd)/reflect/SKILL.md" ~/.claude/skills/reflect/SKILL.md
+ln -sf "$(pwd)/reflect/templates" ~/.claude/skills/reflect/templates
 ```
 
 ### Copy
 
 ```bash
-git clone https://github.com/shashwatjain/self-improving-agents.git
+git clone https://github.com/codeyogi911/reflect.git
 mkdir -p ~/.claude/skills/reflect
-cp self-improving-agents/SKILL.md ~/.claude/skills/reflect/SKILL.md
-cp -r self-improving-agents/templates ~/.claude/skills/reflect/templates
+cp reflect/SKILL.md ~/.claude/skills/reflect/SKILL.md
+cp -r reflect/templates ~/.claude/skills/reflect/templates
 ```
 
 ## Usage
