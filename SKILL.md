@@ -1,13 +1,13 @@
 ---
 name: reflect
 description: >
-  Analyze Claude Code session transcripts captured by Entire CLI. Extracts
-  patterns (retry loops, research gaps, what worked, what took too long),
-  produces structured reflections, and optionally bakes validated insights
-  into your CLAUDE.md or agent files. Use when: user asks to analyze sessions,
-  reflect on past work, review what happened, improve agents from transcripts,
-  mine session history, or check what went wrong. Also trigger on "reflect",
-  "session analysis", "what went wrong", "what can I improve".
+  Analyze Claude Code session transcripts. Extracts patterns (retry loops,
+  research gaps, what worked, what took too long), produces structured
+  reflections, and optionally bakes validated insights into your CLAUDE.md
+  or agent files. Use when: user asks to analyze sessions, reflect on past
+  work, review what happened, improve agents from transcripts, mine session
+  history, or check what went wrong. Also trigger on "reflect", "session
+  analysis", "what went wrong", "what can I improve".
 allowed-tools: Read, Edit, Bash, Glob, Grep
 metadata:
   author: shashwatjain

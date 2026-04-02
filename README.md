@@ -4,11 +4,11 @@
 
 `/reflect` analyzes your session transcripts and extracts what worked, what didn't, and what your AI assistant should learn. Insights get baked directly into your project's `CLAUDE.md` or agent files so the same mistakes never happen twice.
 
-Powered by [Entire CLI](https://entire.io) session capture. Works with **Claude Code** and **Cursor**.
+Works with **Claude Code** and **Cursor**. Requires [Entire CLI](https://entire.io) for session capture.
 
 ## How It Works
 
-1. [Entire CLI](https://entire.io) records your coding sessions as transcripts
+1. Your coding sessions are recorded as transcripts
 2. You run `/reflect` when you want to learn from recent sessions
 3. The skill extracts patterns: retry loops, research gaps, time sinks, what worked well
 4. Each pattern gets a confidence level (HIGH/MEDIUM/LOW) based on severity and recurrence
@@ -18,18 +18,10 @@ Over time, your project accumulates real, evidence-based instructions from actua
 
 ## Prerequisites
 
-- **[Entire CLI](https://entire.io)** — captures your session transcripts
+- **[Entire CLI](https://entire.io)** for session capture
 - At least one completed session to analyze
 
-Don't have Entire CLI yet? No worries — the first time you run `/reflect`, the skill will detect it's missing and walk you through installation and setup. Or install it manually:
-
-```bash
-# macOS / Linux
-brew tap entireio/tap && brew install entireio/tap/entire
-
-# Or via Go
-go install github.com/entireio/cli/cmd/entire@latest
-```
+If Entire CLI isn't installed, `/reflect` will detect it and walk you through setup.
 
 ## Install
 
@@ -109,7 +101,7 @@ Any argument that isn't a number, session ID, or "and bake" is treated as a topi
 
 ### What happens when you run `/reflect`
 
-1. Reads your session transcripts via Entire CLI
+1. Reads your session transcripts
 2. Looks for patterns (retry loops, failures, successes, time sinks)
 3. Cross-references against prior reflections to track recurring issues
 4. Writes a structured reflection to `.claude/reflections.md`
@@ -160,7 +152,7 @@ When you run `/reflect and bake` (or confirm when prompted), HIGH confidence ins
 ## FAQ
 
 **Q: Does this work without Entire CLI?**
-No. Entire CLI captures the session transcripts that `/reflect` analyzes. Without it, there's nothing to reflect on.
+No. Session transcripts are needed for analysis — Entire CLI is what captures them.
 
 **Q: Will it modify my code?**
 No. It only writes to `.claude/reflections.md` and optionally to `CLAUDE.md` or agent files. It never touches your source code.

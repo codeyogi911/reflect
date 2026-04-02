@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A Claude Code skill called `/reflect` that analyzes session transcripts captured by Entire CLI. It extracts patterns (retry loops, research gaps, what worked, time sinks), produces structured reflections, and optionally bakes validated insights into CLAUDE.md or agent files.
+A Claude Code skill called `/reflect` that analyzes session transcripts to extract patterns (retry loops, research gaps, what worked, time sinks), produce structured reflections, and optionally bake validated insights into CLAUDE.md or agent files.
 
 ## Structure
 
