@@ -1,0 +1,1 @@
+this skill works with both claude code and cursor because cursor automatically loads from ~/.claude/skills, we need to noew improve the docs so this can be ready for mass adoption, we need to give proper install instructions as well.
