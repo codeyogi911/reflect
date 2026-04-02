@@ -1,0 +1,15 @@
+prepare this skill to be also usable in cursor
+
+---
+
+/codex:review
+
+---
+
+<task-notification>
+<task-id>bxca5sbrh</task-id>
+<tool-use-id>toolu_01F3QA8WnX8hmHuX1u8xhH8v</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-shashwatjain-Repos-reflect/e18cbd2f-b12e-4656-8c67-1552eb901c78/tasks/bxca5sbrh.output</output-file>
+<status>completed</status>
+<summary>Background command "Codex review" completed (exit code 0)</summary>
+</task-notification>
