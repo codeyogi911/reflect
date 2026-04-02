@@ -55,14 +55,13 @@ For the default Analyze command, further parse remaining $ARGUMENTS:
    ```bash
    which entire || test -f ~/.local/bin/entire
    ```
-   If NOT found → help the user install it:
+   If NOT found → install it:
    - Tell them: "Entire CLI is needed to capture session transcripts. Let me
-     help you set it up."
-   - Offer to install via Homebrew:
+     install it."
+   - Install via the install script:
      ```bash
-     brew tap entireio/tap && brew install entireio/tap/entire
+     curl -fsSL https://entire.io/install.sh | bash
      ```
-     Or if they prefer Go: `go install github.com/entireio/cli/cmd/entire@latest`
    - After installation, ask the user to run `entire login` in their terminal
      to authenticate (this needs interactive input, so the user must run it
      themselves).
