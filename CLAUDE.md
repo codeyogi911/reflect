@@ -4,20 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A Claude Code skill called `/reflect` that analyzes session transcripts to extract patterns (retry loops, research gaps, what worked, time sinks), produce structured reflections, and optionally bake validated insights into CLAUDE.md or agent files.
+A Claude Code skill called `/reflect` — portable, repo-owned memory for AI coding agents. Agent memory (Claude's `~/.claude/projects/`, Cursor's internal state) is machine-local and vendor-specific; `/reflect` puts memory in the repo instead. Entire CLI is the durable write-path and checkpoint substrate; `/reflect` reads from that substrate to extract decisions, failures, and working context. Stores interpretations in a structured knowledge base (`.reflect/`) and generates context overlays that make every future session smarter.
 
 ## Structure
 
-- `SKILL.md` — the skill definition file (frontmatter + workflow steps)
-- `templates/reflection-format.md` — the output format template for reflections
+- `SKILL.md` — the skill definition file (frontmatter + workflow steps, all commands)
+- `SPEC.md` — agent-agnostic specification for the `.reflect/` evidence store format
+- `templates/reflection-format.md` — output format for `.claude/reflections.md` (backward compat)
+- `templates/session-format.md` — format for session summaries in `.reflect/sessions/`
+- `templates/decision-format.md` — format for decision records in `.reflect/decisions/`
+- `templates/insight-format.md` — format for insights in `.reflect/insights/`
+- `templates/file-knowledge-format.md` — format for file knowledge maps in `.reflect/files/`
+- `templates/context-format.md` — rules for generating `.reflect/context.md`
 - `README.md` — installation and usage docs
 - `CLAUDE.md` — this file
 - `evals/evals.json` — skill evaluation test cases
 
 ## Development
 
-- Edit `SKILL.md` to change the analysis workflow
-- Edit `templates/reflection-format.md` to change the reflection output format
+- Edit `SKILL.md` to change the analysis workflow or add commands
+- Edit `templates/` to change output formats for any artifact type
 - Test locally by symlinking:
   ```bash
   mkdir -p ~/.claude/skills/reflect

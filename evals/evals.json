@@ -4,50 +4,67 @@
     {
       "id": 1,
       "prompt": "Analyze my recent sessions and show me what patterns you find",
-      "expected_output": "Checks for Entire CLI. Runs entire status and entire explain. Identifies patterns (retry loops, successes, issues). Writes structured reflection to .claude/reflections.md. Shows summary to user with confidence levels.",
-      "files": []
+      "expected_output": "Checks for Entire CLI. Runs entire status and entire explain. Identifies patterns (retry loops, successes, issues). Creates .reflect/ directory structure if needed. Writes session summaries to .reflect/sessions/, extracts insights to .reflect/insights/, updates .reflect/index.md. Also writes to .claude/reflections.md for backward compat. Regenerates .reflect/context.md. Shows summary with confidence levels and knowledge store stats."
     },
     {
       "id": 2,
       "prompt": "Reflect on my sessions — I don't have Entire installed",
-      "expected_output": "Checks for Entire CLI, detects it's missing. Offers to install via Homebrew (brew tap entireio/tap && brew install entireio/tap/entire) or Go. Asks user to run entire login to authenticate. Does NOT create any files or attempt analysis until Entire is installed.",
-      "files": []
-    },
-    {
-      "id": 8,
-      "prompt": "/reflect — Entire is installed but not configured in this repo",
-      "expected_output": "Checks for Entire CLI (found). Runs entire status, detects repo is not configured. Runs entire enable to set up session capture. Reports that Entire is now set up and asks user to run some sessions first. Stops without attempting analysis.",
-      "files": []
+      "expected_output": "Checks for Entire CLI, detects it's missing. Offers to install via Homebrew (brew tap entireio/tap && brew install entireio/tap/entire) or Go. Asks user to run entire login to authenticate. Does NOT create any files or attempt analysis until Entire is installed."
     },
     {
       "id": 3,
       "prompt": "/reflect and bake — I have a CLAUDE.md but no .claude/agents/ directory",
-      "expected_output": "Analyzes sessions, produces reflection. HIGH confidence insights are baked into CLAUDE.md under a ## Session Insights section. Does NOT create agent files. Marks baked insights as BAKED in reflections.md.",
-      "files": []
+      "expected_output": "Analyzes sessions, produces reflection. Creates .reflect/ knowledge store. HIGH confidence insights are baked into CLAUDE.md under a ## Session Insights section. Does NOT create agent files. Updates insight files with baked: true. Regenerates context.md."
     },
     {
       "id": 4,
       "prompt": "/reflect and bake — I have .claude/agents/builder.md with a ## Project-Specific Rules section",
-      "expected_output": "Analyzes sessions, produces reflection. Builder-relevant HIGH confidence insights are appended to .claude/agents/builder.md's ## Project-Specific Rules section. Other insights go to CLAUDE.md. Does NOT overwrite existing rules.",
-      "files": []
+      "expected_output": "Analyzes sessions, produces reflection. Builder-relevant HIGH confidence insights are appended to .claude/agents/builder.md's ## Project-Specific Rules section. Other insights go to CLAUDE.md. Does NOT overwrite existing rules. Updates insight files with baked status."
     },
     {
       "id": 5,
       "prompt": "/reflect last 2 sessions",
-      "expected_output": "Only analyzes the 2 most recent sessions (not the default 5). Produces reflection scoped to those sessions. Writes to .claude/reflections.md.",
-      "files": []
+      "expected_output": "Only analyzes the 2 most recent sessions (not the default 5). Creates session summaries in .reflect/sessions/. Extracts insights and decisions. Writes to .claude/reflections.md. Regenerates context.md."
     },
     {
       "id": 6,
       "prompt": "/reflect auth issues",
-      "expected_output": "Runs entire explain --short --search-all to get all session intents. Semantically matches sessions related to authentication. Analyzes only matched sessions. Reflection includes Topic filter line showing how many sessions matched. Writes to .claude/reflections.md.",
-      "files": []
+      "expected_output": "Runs entire explain --short --search-all to get all session intents. Semantically matches sessions related to authentication. Analyzes only matched sessions. Creates session summaries and insights. Reflection includes Topic filter line. Regenerates context.md."
     },
     {
       "id": 7,
       "prompt": "/reflect slow builds and bake",
-      "expected_output": "Strips 'and bake' flag, treats 'slow builds' as topic search. Searches all session intents for build-performance-related sessions. Analyzes matched sessions, produces reflection. AUTO-bakes HIGH confidence insights without asking. Writes to .claude/reflections.md.",
-      "files": []
+      "expected_output": "Strips 'and bake' flag, treats 'slow builds' as topic search. Searches all session intents for build-performance-related sessions. Analyzes matched sessions, creates knowledge artifacts. AUTO-bakes HIGH confidence insights without asking. Regenerates context.md."
+    },
+    {
+      "id": 8,
+      "prompt": "/reflect — Entire is installed but not configured in this repo",
+      "expected_output": "Checks for Entire CLI (found). Runs entire status, detects repo is not configured. Runs entire enable to set up session capture. Reports that Entire is now set up and asks user to run some sessions first. Stops without attempting analysis."
+    },
+    {
+      "id": 9,
+      "prompt": "/reflect why src/auth/middleware.ts",
+      "expected_output": "Parses 'why src/auth/middleware.ts' from arguments. Encodes path to src--auth--middleware.ts. Checks .reflect/files/ for knowledge map. If found, follows session, decision, and insight references. Presents a chronological narrative: what the file does, decision trail, active rules, and pitfalls. If not found, searches .reflect/sessions/ for sessions mentioning the file."
+    },
+    {
+      "id": 10,
+      "prompt": "/reflect what-failed testing",
+      "expected_output": "Parses 'what-failed testing' from arguments. Searches .reflect/insights/ for anti-pattern and pitfall entries related to testing. Searches .reflect/sessions/ for testing-related failures. Sorts by severity then recency. Presents failure patterns with evidence, times seen, and bake status. Suggests baking unbaked HIGH insights."
+    },
+    {
+      "id": 11,
+      "prompt": "/reflect context",
+      "expected_output": "Reads context-format.md template. Reads .reflect/config.yaml if exists (falls back to defaults). Gathers insights above freshness threshold, accepted decisions, recent file knowledge. Generates .reflect/context.md with Active Rules, Key Decisions, File Notes, Watch Out sections. Respects line budget. Tells user about @.reflect/context.md injection if not in CLAUDE.md."
+    },
+    {
+      "id": 12,
+      "prompt": "/reflect status",
+      "expected_output": "Counts artifacts in .reflect/ subdirectories. Reads all insights and calculates freshness. Presents dashboard: artifact counts, freshness distribution (fresh/aging/stale), action items (unbaked HIGHs, promotion candidates, archival candidates), context.md last updated date."
+    },
+    {
+      "id": 13,
+      "prompt": "/reflect search database",
+      "expected_output": "Parses 'search database' from arguments. Greps across all .reflect/ markdown files for 'database'. Reads matched files and assesses relevance. Groups results by type (sessions, decisions, insights, file maps). Presents top 10 most relevant results with brief excerpts."
     }
   ]
 }
