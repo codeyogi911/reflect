@@ -64,28 +64,34 @@ def _call_claude(prompt: str, system_prompt: str, model: str, max_tokens: int) -
         "--model", model,
         "--output-format", "json",
         "--max-turns", "1",
+        "--tools", "",
         "--system-prompt", system_prompt,
     ]
 
-    result = subprocess.run(
-        cmd,
-        input=prompt,
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
+    try:
+        result = subprocess.run(
+            cmd,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+    except subprocess.TimeoutExpired:
+        return MakerResponse(output="[timeout after 300s]", usage=TokenUsage())
 
-    if result.returncode != 0:
+    # Claude CLI returns JSON even on errors — always try to parse stdout
+    try:
+        data = json.loads(result.stdout)
+    except (json.JSONDecodeError, TypeError):
         return MakerResponse(
-            output=f"[CLI error: {result.stderr[:500]}]",
+            output=f"[CLI error rc={result.returncode}: {result.stderr[:300]} | stdout: {(result.stdout or '')[:300]}]",
             usage=TokenUsage(),
         )
 
-    try:
-        data = json.loads(result.stdout)
-    except json.JSONDecodeError:
+    # Check if the CLI reported an error in JSON
+    if data.get("is_error"):
         return MakerResponse(
-            output=result.stdout[:4000] if result.stdout else "[empty response]",
+            output=f"[CLI error: {data.get('result', 'unknown')}]",
             usage=TokenUsage(),
         )
 

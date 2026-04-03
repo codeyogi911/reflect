@@ -154,6 +154,7 @@ def _call_claude_checker(prompt: str, system_prompt: str, model: str, max_tokens
         "--model", model,
         "--output-format", "json",
         "--max-turns", "1",
+        "--tools", "",
         "--system-prompt", system_prompt,
     ]
 
@@ -163,23 +164,24 @@ def _call_claude_checker(prompt: str, system_prompt: str, model: str, max_tokens
             input=prompt,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=300,
         )
     except subprocess.TimeoutExpired:
         return {"output": "[timeout]", "usage": TokenUsage(), "cost_usd": 0.0}
 
-    if result.returncode != 0:
+    # Claude CLI returns JSON even on errors — always try to parse stdout
+    try:
+        data = json.loads(result.stdout)
+    except (json.JSONDecodeError, TypeError):
         return {
-            "output": f"[CLI error: {result.stderr[:500]}]",
+            "output": f"[CLI error rc={result.returncode}: {result.stderr[:300]} | stdout: {(result.stdout or '')[:300]}]",
             "usage": TokenUsage(),
             "cost_usd": 0.0,
         }
 
-    try:
-        data = json.loads(result.stdout)
-    except json.JSONDecodeError:
+    if data.get("is_error"):
         return {
-            "output": result.stdout[:4000] if result.stdout else "[empty]",
+            "output": f"[CLI error: {data.get('result', 'unknown')}]",
             "usage": TokenUsage(),
             "cost_usd": 0.0,
         }

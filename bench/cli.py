@@ -156,7 +156,7 @@ def main():
     p_run.add_argument("--target-repo", required=True, help="Path to the target repository")
     p_run.add_argument("--v3-reflect", required=True, help="Path to v3 .reflect/ directory")
     p_run.add_argument("--tasks", default="bench/tasks/tasks.json", help="Path to tasks JSON file")
-    p_run.add_argument("--model", default="claude-sonnet-4-20250514", help="Claude model for maker and checker")
+    p_run.add_argument("--model", default="claude-sonnet-4-6", help="Claude model for maker and checker")
     p_run.add_argument("--max-rounds", type=int, default=5, help="Max maker-checker iterations")
     p_run.add_argument("--dry-run", action="store_true", help="Validate config and show context sizes without API calls")
     p_run.set_defaults(func=cmd_run)

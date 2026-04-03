@@ -9,8 +9,8 @@ from typing import Optional
 class BenchmarkConfig:
     target_repo: str
     v3_reflect_dir: str
-    maker_model: str = "claude-sonnet-4-20250514"
-    checker_model: str = "claude-sonnet-4-20250514"
+    maker_model: str = "claude-sonnet-4-6"
+    checker_model: str = "claude-sonnet-4-6"
     max_rounds: int = 5
     temperature: float = 0.0
     seed: int = 42
