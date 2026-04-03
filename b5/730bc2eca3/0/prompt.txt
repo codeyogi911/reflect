@@ -1,0 +1,47 @@
+align repo description
+
+---
+
+i saw soemthing contradictory, we added context.md to gitignore while refering it from claude.md, i am puzzled
+
+---
+
+i hoped the wiring is auto now right? devs dont have to run it manually and everything remains fresh?
+
+---
+
+we need this configurable, auto or manual
+
+---
+
+default should be auto
+
+---
+
+/codex:review
+
+---
+
+/reflect
+
+---
+
+<task-notification>
+<task-id>bvqlty829</task-id>
+<tool-use-id>REDACTED</tool-use-id>
+<output-file>/private/tmp/claude-501/-Users-shashwatjain-Repos-reflect/56cd9d49-c09d-443d-9eaf-2b4253ffc548/tasks/bvqlty829.output</output-file>
+<status>completed</status>
+<summary>Background command "Codex review" completed (exit code 0)</summary>
+</task-notification>
+
+---
+
+when running is auto mode will we have staged changes again after commit?
+
+---
+
+what are other options?
+
+---
+
+3
