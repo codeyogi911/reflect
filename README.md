@@ -111,43 +111,18 @@ Decisions, failure patterns, and working context — stored as structured Markdo
 
 ## Install
 
-### One-liner
-
 ```bash
-git clone https://github.com/codeyogi911/reflect.git && \
-mkdir -p ~/.claude/skills/reflect && \
-ln -sf "$(cd reflect && pwd)/SKILL.md" ~/.claude/skills/reflect/SKILL.md && \
-ln -sf "$(cd reflect && pwd)/templates" ~/.claude/skills/reflect/templates && \
-ln -sf "$(cd reflect && pwd)/hooks" ~/.claude/skills/reflect/hooks
-```
-
-### Step by step
-
-```bash
-# 1. Clone
 git clone https://github.com/codeyogi911/reflect.git
-
-# 2. Create skill directory
-mkdir -p ~/.claude/skills/reflect
-
-# 3. Symlink (stays up to date with git pull)
-ln -sf "$(cd reflect && pwd)/SKILL.md" ~/.claude/skills/reflect/SKILL.md
-ln -sf "$(cd reflect && pwd)/templates" ~/.claude/skills/reflect/templates
-ln -sf "$(cd reflect && pwd)/hooks" ~/.claude/skills/reflect/hooks
+cd reflect && ./install.sh
 ```
+
+That's it. Symlinks keep everything up to date — to upgrade, just `git pull`.
 
 ### Verify
 
 ```bash
 ls -la ~/.claude/skills/reflect/
 # SKILL.md and templates/ should point to your cloned repo
-```
-
-### Update
-
-```bash
-cd reflect && git pull
-# Symlinks mean changes take effect immediately
 ```
 
 ---
