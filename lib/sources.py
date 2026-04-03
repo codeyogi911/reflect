@@ -83,6 +83,32 @@ def get_entire_transcript(checkpoint_id, max_lines=100):
     return "\n".join(lines[:max_lines])
 
 
+def get_checkpoint_for_commit(sha):
+    """Get checkpoint data for a specific commit via entire explain --commit."""
+    raw = run(["entire", "explain", "--commit", sha, "--search-all", "--no-pager"], timeout=15)
+    if not raw:
+        return None
+    # Parse the output: first line has "Checkpoint: <id>"
+    cp_id = None
+    intent = ""
+    commits = []
+    for line in raw.split("\n"):
+        if line.startswith("Checkpoint:"):
+            cp_id = line.split(":", 1)[1].strip()
+        elif line.startswith("Intent:"):
+            intent = line.split(":", 1)[1].strip()
+        elif line.startswith("Created:"):
+            date = line.split(":", 1)[1].strip()[:10]
+    if not cp_id:
+        return None
+    return {
+        "id": cp_id,
+        "intent": intent,
+        "date": date if date else "",
+        "commits": [{"sha": sha, "message": ""}],
+    }
+
+
 def get_git_log(count=15):
     """Get recent git commits."""
     raw = run(["git", "log", "--oneline", f"-{count}", "--format=%h %ad %s", "--date=short"])
