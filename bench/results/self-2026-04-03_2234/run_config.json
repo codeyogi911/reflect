@@ -1,0 +1,19 @@
+{
+  "target_repo": "/Users/shashwatjain/Repos/reflect",
+  "v3_reflect_dir": "",
+  "maker_model": "claude-sonnet-4-6",
+  "checker_model": "claude-sonnet-4-6",
+  "max_rounds": 1,
+  "temperature": 0.0,
+  "seed": 42,
+  "max_maker_tokens": 4096,
+  "max_checker_tokens": 2048,
+  "tasks_file": "bench/tasks/self_tasks.json",
+  "run_id": "2026-04-03_2234",
+  "mode": "self-bench-sandbox",
+  "quick": true,
+  "task_ids": [
+    "self-pitfall-001"
+  ],
+  "max_budget_per_session": 0.5
+}

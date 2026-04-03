@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Default reflect harness — closed-loop context generation.
 
-Reads Entire CLI transcripts + git history + notes on demand.
-Extracts signals (corrections, decisions, hot files, open threads)
-from session transcripts and generates semantic context — not git log.
+Uses Entire CLI's AI-generated summaries (entire explain --generate) to produce
+rich, semantic context. Falls back to basic git log when Entire is unavailable.
 
 Zero intermediate storage. Entire is the memory; this is the lens.
 """
@@ -15,7 +14,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -43,55 +42,156 @@ def has_entire():
 def has_git():
     return bool(run(["git", "rev-parse", "--is-inside-work-tree"]))
 
-def get_entire_checkpoints():
-    """Get all checkpoints from Entire CLI."""
-    raw = run(["entire", "explain", "--short", "--search-all", "--no-pager"])
+def get_recent_commits(limit=15):
+    """Get recent commit SHAs from git log."""
+    raw = run(["git", "log", f"-{limit}", "--format=%H", "--no-merges"])
     if not raw:
         return []
-    checkpoints = []
+    return raw.split("\n")
+
+def get_checkpoint_summary(commit_sha, generate=True):
+    """Get Entire's AI summary for a commit's checkpoint.
+
+    Returns parsed dict or None if no checkpoint exists.
+    If generate=True, triggers summary generation for checkpoints without one.
+    """
+    raw = run(
+        ["entire", "explain", "--commit", commit_sha, "--no-pager"],
+        timeout=15,
+    )
+    if not raw or "does not have an Entire-Checkpoint trailer" in raw:
+        return None
+
+    parsed = _parse_checkpoint_output(raw)
+
+    # Generate summary if missing (--generate requires --checkpoint flag)
+    if generate and parsed and parsed.get("outcome") == "(not generated)":
+        cp_id = parsed.get("checkpoint_id", "")
+        if cp_id:
+            gen_raw = run(
+                ["entire", "explain", "--checkpoint", cp_id, "--generate", "--no-pager"],
+                timeout=120,
+            )
+            if gen_raw and "Summary generated" in gen_raw:
+                # Re-read to get the generated summary
+                raw = run(
+                    ["entire", "explain", "--commit", commit_sha, "--no-pager"],
+                    timeout=15,
+                )
+                if raw:
+                    parsed = _parse_checkpoint_output(raw)
+
+    return parsed
+
+def _parse_checkpoint_output(raw):
+    """Parse the structured output of `entire explain --checkpoint`."""
+    result = {
+        "checkpoint_id": "",
+        "session_id": "",
+        "created": "",
+        "tokens": 0,
+        "commits": [],
+        "intent": "",
+        "outcome": "",
+        "learnings": [],
+        "friction": [],
+        "open_items": [],
+        "files": [],
+    }
+
     lines = raw.split("\n")
     i = 0
+    current_section = None
+
     while i < len(lines):
         line = lines[i]
-        match = re.match(r'^\[([a-f0-9-]+)\]\s+(?:\[temporary\]\s+)?"(.+)"', line)
-        if match:
-            cp_id = match.group(1)
-            intent = match.group(2).rstrip('"').replace("\\n", " ")
-            commits = []
-            dates = []
+
+        # Header fields
+        if line.startswith("Checkpoint: "):
+            result["checkpoint_id"] = line.split(": ", 1)[1]
+        elif line.startswith("Session: "):
+            result["session_id"] = line.split(": ", 1)[1]
+        elif line.startswith("Created: "):
+            result["created"] = line.split(": ", 1)[1]
+        elif line.startswith("Tokens: "):
+            try:
+                result["tokens"] = int(line.split(": ", 1)[1])
+            except ValueError:
+                pass
+        elif line.startswith("Intent: "):
+            result["intent"] = line.split(": ", 1)[1]
+        elif line.startswith("Outcome: "):
+            result["outcome"] = line.split(": ", 1)[1]
+
+        # Commits section
+        elif line.startswith("Commits:"):
             i += 1
             while i < len(lines) and lines[i].startswith("  "):
                 commit_match = re.match(
-                    r"^\s+(\d{2}-\d{2})\s+(\d{2}:\d{2})?\s*\(([a-f0-9]+)\)\s+(.*)",
-                    lines[i],
+                    r"\s+([a-f0-9]+)\s+(\S+)\s+(.*)", lines[i]
                 )
                 if commit_match:
-                    dates.append(commit_match.group(1))
-                    commits.append({
-                        "sha": commit_match.group(3),
-                        "message": commit_match.group(4).strip(),
+                    result["commits"].append({
+                        "sha": commit_match.group(1),
+                        "date": commit_match.group(2),
+                        "message": commit_match.group(3).strip(),
                     })
                 i += 1
-            checkpoints.append({
-                "id": cp_id,
-                "intent": intent[:200],
-                "date": dates[0] if dates else "",
-                "commits": commits,
-            })
-        else:
-            i += 1
-    return checkpoints
+            continue
 
-def get_entire_transcript(checkpoint_id, max_lines=200):
-    """Get full transcript for a checkpoint, truncated."""
-    raw = run(
-        ["entire", "explain", "--checkpoint", checkpoint_id, "--full", "--no-pager"],
-        timeout=15,
-    )
-    if not raw:
-        return ""
-    lines = raw.split("\n")
-    return "\n".join(lines[:max_lines])
+        # Learnings section (multi-level indented)
+        elif line.startswith("Learnings:"):
+            current_section = "learnings"
+            i += 1
+            while i < len(lines) and (lines[i].startswith("  ") or lines[i] == ""):
+                stripped = lines[i].strip()
+                if stripped.startswith("- "):
+                    result["learnings"].append(stripped[2:])
+                elif stripped.endswith(":") and not stripped.startswith("- "):
+                    # Sub-category header like "Repository:", "Code:", "Workflow:"
+                    pass
+                i += 1
+            continue
+
+        # Friction section
+        elif line.startswith("Friction:"):
+            current_section = "friction"
+            i += 1
+            while i < len(lines) and (lines[i].startswith("  ") or lines[i] == ""):
+                stripped = lines[i].strip()
+                if stripped.startswith("- "):
+                    result["friction"].append(stripped[2:])
+                i += 1
+            continue
+
+        # Open Items section
+        elif line.startswith("Open Items:"):
+            current_section = "open_items"
+            i += 1
+            while i < len(lines) and (lines[i].startswith("  ") or lines[i] == ""):
+                stripped = lines[i].strip()
+                if stripped.startswith("- "):
+                    result["open_items"].append(stripped[2:])
+                i += 1
+            continue
+
+        # Files section
+        elif line.startswith("Files:"):
+            i += 1
+            while i < len(lines) and lines[i].startswith("  "):
+                stripped = lines[i].strip()
+                if stripped.startswith("- "):
+                    result["files"].append(stripped[2:])
+                i += 1
+            continue
+
+        # Stop at transcript section — we don't need it
+        elif line.startswith("Transcript"):
+            break
+
+        i += 1
+
+    return result
 
 def get_notes(notes_dir):
     """Read manual notes from .reflect/notes/."""
@@ -105,224 +205,173 @@ def get_notes(notes_dir):
     return notes
 
 # ---------------------------------------------------------------------------
-# Signal extraction
+# Section builders — powered by AI summaries
 # ---------------------------------------------------------------------------
 
-CORRECTION_PREFIXES = [
-    "no,", "no ", "don't", "stop", "wait,", "actually,", "actually ",
-    "that's wrong", "that's not", "not what i", "i said", "i meant",
-    "undo", "revert", "go back", "wrong", "incorrect",
-]
+def _is_easy_to_reach(learning):
+    """Return True if the learning is trivially derivable from code or git.
 
-FILE_PATH_RE = re.compile(
-    r'(?:Read|Edit|Write|Created|Modified|Glob|Grep)\s+[`"]?'
-    r'([A-Za-z0-9_./-]+\.[a-z]{1,10})'
-)
-BARE_PATH_RE = re.compile(
-    r'(?:^|\s)([a-zA-Z0-9_]+(?:/[a-zA-Z0-9_.]+)+\.[a-z]{1,10})'
-)
+    Easy-to-reach signals (1-2 commands away):
+    - File:line references — agent can just read the file
+    - Pure code-structure facts — agent can grep/glob for these
+    """
+    # file:line pattern like "lib/context.py:27-31:" or "reflect:12-15:"
+    if re.search(r'[a-zA-Z0-9_./-]+\.\w+:\d+', learning):
+        return True
+    # bare-name:line like "reflect:12-15:"
+    if re.match(r'^[a-zA-Z0-9_]+:\d+', learning):
+        return True
+    # "file.ext does Y" patterns — starts with a file path (including dotfiles)
+    if re.match(r'^\.?[a-zA-Z0-9_/.-]+\.\w+[\s:]', learning):
+        return True
+    return False
 
 
-def extract_signals(transcript, checkpoint):
-    """Extract corrections, hot files, and open-thread flag from a transcript."""
-    corrections = []
-    file_mentions = Counter()
-    last_assistant_line = ""
+def build_learnings(summaries, max_lines=25):
+    """Build Learnings section — only non-obvious insights.
 
-    for line in transcript.split("\n"):
-        # Track assistant context for pairing with corrections
-        if line.startswith("[Assistant]"):
-            last_assistant_line = line.split("] ", 1)[-1][:120]
-            continue
-
-        # Detect corrections in user messages
-        if line.startswith("[User]"):
-            user_text = line.split("] ", 1)[-1]
-            if len(user_text) >= 10:
-                lower = user_text.lower().strip()
-                if any(lower.startswith(p) for p in CORRECTION_PREFIXES):
-                    corrections.append({
-                        "date": checkpoint.get("date", ""),
-                        "user_said": user_text[:150],
-                        "context": last_assistant_line,
-                        "session_id": checkpoint["id"][:12],
-                    })
-
-        # Detect file paths in tool calls and content
-        for match in FILE_PATH_RE.finditer(line):
-            path = match.group(1)
-            if not path.startswith(".") and "/" in path:
-                file_mentions[path] += 1
-        for match in BARE_PATH_RE.finditer(line):
-            path = match.group(1)
-            if not path.startswith("."):
-                file_mentions[path] += 1
-
-    is_open_thread = bool(checkpoint.get("intent")) and not checkpoint.get("commits")
-
-    return {
-        "corrections": corrections,
-        "file_mentions": file_mentions,
-        "is_open_thread": is_open_thread,
-    }
-
-# ---------------------------------------------------------------------------
-# Section builders
-# ---------------------------------------------------------------------------
-
-def build_warnings(all_corrections, max_lines=10):
-    """Build Warnings section from corrections across all sessions."""
-    if not all_corrections:
+    Filters out anything an agent can derive in 1-2 commands
+    (file:line references, code-structure facts).
+    """
+    if not summaries:
         return []
-    lines = ["## Warnings"]
-    # Deduplicate by user_said prefix (first 60 chars)
+    all_learnings = []
     seen = set()
-    for c in all_corrections:
-        key = c["user_said"][:60].lower()
-        if key in seen:
+    for s in summaries:
+        for learning in s.get("learnings", []):
+            # Deduplicate by first 60 chars
+            key = learning[:60].lower()
+            if key not in seen:
+                seen.add(key)
+                # Skip learnings that are easy to reach from code/git
+                if not _is_easy_to_reach(learning):
+                    all_learnings.append(learning)
+
+    if not all_learnings:
+        return []
+    lines = ["## Learnings", "<!-- Source: AI-generated session summaries — verify before acting -->"]
+    for learning in all_learnings[:max_lines - 2]:
+        # Trim to fit without truncating mid-sentence
+        if len(learning) > 150:
+            learning = learning[:147] + "..."
+        lines.append(f"- {learning}")
+    lines.append("")
+    return lines
+
+
+def build_session_history(summaries, max_lines=20):
+    """Build Session History — what happened and why, not just commit messages."""
+    if not summaries:
+        return []
+    lines = ["## Session History", "<!-- Source: AI-generated session summaries — verify before acting -->"]
+    for s in summaries:
+        if not s.get("intent") or s.get("outcome") == "(not generated)":
+            # Fall back to commit message for sessions without summaries
+            for c in s.get("commits", []):
+                lines.append(f"- {c.get('date', '')}: `{c['message']}`")
             continue
-        seen.add(key)
-        text = c["user_said"]
-        if len(text) > 100:
-            text = text[:100] + "..."
-        lines.append(f"- **{text}** — {c['date']} (session {c['session_id']})")
+
+        date = s.get("created", "")[:10]
+        intent = s["intent"]
+        if len(intent) > 100:
+            intent = intent[:97] + "..."
+        outcome = s.get("outcome", "")
+        if len(outcome) > 120:
+            outcome = outcome[:117] + "..."
+
+        lines.append(f"- **{date}**: {intent}")
+        if outcome and outcome != "(not generated)":
+            lines.append(f"  Result: {outcome}")
+
         if len(lines) >= max_lines:
             break
     lines.append("")
     return lines
 
 
-QUESTION_PREFIXES = [
-    "question", "help me", "how ", "what ", "why ", "can ",
-    "i want", "let's", "please", "could you", "tell me",
-]
+def build_friction(summaries, max_lines=10):
+    """Build Friction section — gotchas and pain points to watch for."""
+    all_friction = []
+    seen = set()
+    for s in summaries:
+        for f in s.get("friction", []):
+            key = f[:60].lower()
+            if key not in seen:
+                seen.add(key)
+                all_friction.append(f)
 
-
-def _is_noisy_decision(intent, commit_msg):
-    """Filter decisions that are user prompts or echo the intent."""
-    lower_intent = intent.lower().strip()
-    # User questions/requests are not decisions
-    if any(lower_intent.startswith(p) for p in QUESTION_PREFIXES):
-        return True
-    # Commit message just echoes the intent — no signal
-    intent_words = set(lower_intent.split())
-    commit_words = set(commit_msg.lower().split())
-    if intent_words and commit_words:
-        overlap = len(intent_words & commit_words) / len(intent_words | commit_words)
-        if overlap > 0.6:
-            return True
-    return False
-
-
-def build_decisions(checkpoints, max_lines=15):
-    """Build Key Decisions section from intent+commit pairs."""
-    decisions = []
-    for cp in checkpoints:
-        if cp.get("commits") and cp.get("intent"):
-            for commit in cp["commits"][:2]:
-                if _is_noisy_decision(cp["intent"], commit["message"]):
-                    continue
-                decisions.append({
-                    "date": cp["date"],
-                    "intent": cp["intent"][:80],
-                    "commit": commit["message"][:80],
-                })
-    if not decisions:
+    if not all_friction:
         return []
-    lines = ["## Key Decisions"]
-    for d in decisions[:max_lines - 1]:
-        lines.append(f"- {d['date']}: {d['intent']} → `{d['commit']}`")
+    lines = ["## Friction & Gotchas", "<!-- Source: AI-generated session summaries — verify before acting -->"]
+    for f in all_friction[:max_lines - 2]:
+        if len(f) > 150:
+            f = f[:147] + "..."
+        lines.append(f"- {f}")
     lines.append("")
     return lines
 
 
-def build_hot_areas(all_file_mentions, total_sessions, max_lines=8):
-    """Build Hot Areas section from file mention frequency."""
-    if not all_file_mentions:
+def build_open_items(summaries, max_lines=10):
+    """Build Open Items section — unfinished work across sessions.
+
+    Prune items whose words overlap >50% with outcomes from newer sessions.
+    Summaries are ordered newest-first, so for item at index i, outcomes
+    from indices 0..i-1 are "later" (more recent).
+    """
+    all_items = []
+    seen = set()
+    for idx, s in enumerate(summaries):
+        # Collect outcome words from sessions newer than this one
+        newer_outcome_words = set()
+        for newer in summaries[:idx]:
+            outcome = newer.get("outcome", "")
+            if outcome and outcome != "(not generated)":
+                newer_outcome_words.update(_tokenize(outcome))
+
+        for item in s.get("open_items", []):
+            key = item[:60].lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            # Prune if >50% of item words appear in newer outcomes
+            item_words = _tokenize(item)
+            if item_words and newer_outcome_words:
+                overlap = len(item_words & newer_outcome_words) / len(item_words)
+                if overlap > 0.5:
+                    continue
+            all_items.append(item)
+
+    if not all_items:
         return []
-    # Sort by count descending, only show files mentioned in 2+ sessions
-    ranked = [(path, count) for path, count in all_file_mentions.most_common(20)
-              if count >= 2]
+    lines = ["## Open Items", "<!-- Source: AI-generated session summaries — verify before acting -->"]
+    for item in all_items[:max_lines - 2]:
+        if len(item) > 150:
+            item = item[:147] + "..."
+        lines.append(f"- {item}")
+    lines.append("")
+    return lines
+
+
+def build_hot_areas(summaries, max_lines=8):
+    """Build Hot Areas from files touched across sessions."""
+    file_sessions = defaultdict(int)
+    total = len(summaries)
+    for s in summaries:
+        seen_in_session = set()
+        for f in s.get("files", []):
+            if f not in seen_in_session:
+                file_sessions[f] += 1
+                seen_in_session.add(f)
+
+    ranked = [(f, count) for f, count in sorted(
+        file_sessions.items(), key=lambda x: -x[1]
+    ) if count >= 2]
+
     if not ranked:
         return []
     lines = ["## Hot Areas"]
     for path, count in ranked[:max_lines - 1]:
-        lines.append(f"- `{path}` — touched in {count} of {total_sessions} sessions")
-    lines.append("")
-    return lines
-
-
-def build_open_threads(checkpoints, max_lines=8):
-    """Build Open Threads section — sessions with intent but no commits.
-
-    Prune threads whose intent words overlap >50% with a later decision.
-    """
-    # Collect committed intents for pruning
-    committed_words = set()
-    for cp in checkpoints:
-        if cp.get("commits") and cp.get("intent"):
-            committed_words.update(_tokenize(cp["intent"]))
-
-    threads = []
-    for cp in checkpoints:
-        if cp.get("intent") and not cp.get("commits"):
-            intent_words = _tokenize(cp["intent"])
-            if not intent_words:
-                continue
-            overlap = len(intent_words & committed_words) / len(intent_words)
-            if overlap < 0.5:
-                threads.append(cp)
-
-    if not threads:
-        return []
-    lines = ["## Open Threads"]
-    for cp in threads[:max_lines - 1]:
-        lines.append(f"- {cp['intent'][:100]} ({cp['date']}, no commits)")
-    lines.append("")
-    return lines
-
-
-STOPWORDS = frozenset(
-    "a an the is are was were be been being have has had do does did will would "
-    "shall should may might can could of in to for on with at by from as into "
-    "through during before after above below between out off over under again "
-    "further then once here there when where why how all each every both few "
-    "more most other some such no nor not only own same so than too very and "
-    "but or if while about against it its this that these those i me my we our "
-    "you your he him his she her they them their what which who whom".split()
-)
-
-
-def _tokenize(text):
-    """Lowercase word tokenization with stopword removal."""
-    words = set(re.findall(r'[a-z][a-z0-9_]+', text.lower()))
-    return words - STOPWORDS
-
-
-GENERIC_VERBS = frozenset(
-    "add get set run use fix new update check make create delete remove "
-    "change move copy find show help explore look try start".split()
-)
-
-
-def build_focus(checkpoints, max_lines=4):
-    """Build Current Focus — keyword summary of recent session intents."""
-    if not checkpoints:
-        return []
-    # Count topic words across recent intents
-    topic_counts = Counter()
-    for cp in checkpoints[:5]:
-        if cp.get("intent"):
-            topic_counts.update(_tokenize(cp["intent"]))
-    # Filter out generic verbs and short words — keep domain-specific terms
-    top_topics = [
-        word for word, _ in topic_counts.most_common(15)
-        if len(word) > 3 and word not in GENERIC_VERBS
-    ]
-    if not top_topics:
-        return []
-    lines = ["## Current Focus"]
-    lines.append(f"Recent work touches: {', '.join(top_topics[:6])}.")
+        lines.append(f"- `{path}` — touched in {count} of {total} sessions")
     lines.append("")
     return lines
 
@@ -349,8 +398,25 @@ def build_notes(notes_dir, max_lines=15):
     lines.append("")
     return lines
 
+
+STOPWORDS = frozenset(
+    "a an the is are was were be been being have has had do does did will would "
+    "shall should may might can could of in to for on with at by from as into "
+    "through during before after above below between out off over under again "
+    "further then once here there when where why how all each every both few "
+    "more most other some such no nor not only own same so than too very and "
+    "but or if while about against it its this that these those i me my we our "
+    "you your he him his she her they them their what which who whom".split()
+)
+
+
+def _tokenize(text):
+    """Lowercase word tokenization with stopword removal."""
+    words = set(re.findall(r'[a-z][a-z0-9_]+', text.lower()))
+    return words - STOPWORDS
+
 # ---------------------------------------------------------------------------
-# Freshness state (unchanged from v4)
+# Freshness state
 # ---------------------------------------------------------------------------
 
 def get_last_run(reflect_dir):
@@ -375,35 +441,61 @@ def write_last_run(reflect_dir, checkpoint_id, git_sha):
 # Main context generation
 # ---------------------------------------------------------------------------
 
+def _read_config(reflect_dir):
+    """Read config.yaml and return dict of settings."""
+    config_file = reflect_dir / "config.yaml"
+    if not config_file.exists():
+        return {}
+    config = {}
+    for line in config_file.read_text().split("\n"):
+        line = line.strip()
+        if line.startswith("#") or ":" not in line:
+            continue
+        key, val = line.split(":", 1)
+        val = val.strip()
+        if val.lower() in ("true", "yes"):
+            val = True
+        elif val.lower() in ("false", "no"):
+            val = False
+        config[key.strip()] = val
+    return config
+
+
 def generate_context(max_lines=150):
-    """Generate semantic context from Entire transcripts + git + notes."""
+    """Generate semantic context from Entire AI summaries + git + notes."""
     reflect_dir = Path(".reflect")
     latest_checkpoint_id = None
     latest_git_sha = None
 
+    config = _read_config(reflect_dir)
+    # Generate summaries by default — users are already sending data to AI agents
+    auto_generate = config.get("auto_generate", True)
+
     # --- Fetch evidence ---
-    checkpoints = []
-    if has_entire():
-        checkpoints = get_entire_checkpoints()[:10]
-        if checkpoints:
-            latest_checkpoint_id = checkpoints[0]["id"]
+    summaries = []
+    commits = []
 
     if has_git():
-        git_sha = run(["git", "rev-parse", "--short", "HEAD"])
-        if git_sha:
-            latest_git_sha = git_sha
+        commits = get_recent_commits(limit=15)
+        if commits:
+            latest_git_sha = commits[0][:7]
 
-    # --- Extract signals from transcripts ---
-    all_corrections = []
-    all_file_mentions = Counter()
-    total_sessions = len(checkpoints)
+    if has_entire() and commits:
+        # Get AI summaries for commits that have checkpoints
+        seen_checkpoints = set()
+        for sha in commits:
+            summary = get_checkpoint_summary(sha, generate=auto_generate)
+            if summary and summary["checkpoint_id"]:
+                # Deduplicate by checkpoint (multiple commits can share one)
+                if summary["checkpoint_id"] not in seen_checkpoints:
+                    seen_checkpoints.add(summary["checkpoint_id"])
+                    summaries.append(summary)
+                    if not latest_checkpoint_id:
+                        latest_checkpoint_id = summary["checkpoint_id"]
+            if len(summaries) >= 10:
+                break
 
-    for cp in checkpoints:
-        transcript = get_entire_transcript(cp["id"], max_lines=200)
-        if transcript:
-            signals = extract_signals(transcript, cp)
-            all_corrections.extend(signals["corrections"])
-            all_file_mentions.update(signals["file_mentions"])
+    total_sessions = len(summaries)
 
     # --- Assemble context with priority-based line budget ---
     sections = []
@@ -412,18 +504,18 @@ def generate_context(max_lines=150):
     header_count = f"{total_sessions} sessions analyzed" if total_sessions else "no sessions"
     sections.append("# Project Context")
     sections.append(
-        f"<!-- GENERATED by reflect harness — do not edit, regenerate with: reflect context -->"
+        "<!-- GENERATED by reflect harness — do not edit, regenerate with: reflect context -->"
     )
     sections.append(f"<!-- Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M')} | {header_count} -->")
     sections.append("")
 
-    # Priority order: warnings > open threads > decisions > hot areas > focus > notes
+    # Only hard-to-derive signals. Session history, hot areas, and
+    # code-structure facts are all 1-2 commands away (entire explain
+    # --short, git log --stat, read the file). Don't waste context.
     section_builders = [
-        lambda: build_warnings(all_corrections),
-        lambda: build_open_threads(checkpoints),
-        lambda: build_decisions(checkpoints),
-        lambda: build_hot_areas(all_file_mentions, total_sessions),
-        lambda: build_focus(checkpoints),
+        lambda: build_learnings(summaries),
+        lambda: build_friction(summaries),
+        lambda: build_open_items(summaries),
         lambda: build_notes(reflect_dir / "notes"),
     ]
 

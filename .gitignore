@@ -2,10 +2,7 @@
 *.swp
 *.swo
 *~
-.claude/
 .entire/
 __pycache__/
 *.pyc
-.reflect/context.md
-.reflect/.last_run
-bench/results/
+bench/results/tmp-*

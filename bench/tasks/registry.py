@@ -37,7 +37,7 @@ def _validate_task(t: dict):
     if missing:
         raise ValueError(f"Task {t.get('id', '???')} missing fields: {missing}")
 
-    valid_types = {"why_query", "code_modification", "debugging", "architectural_reasoning"}
+    valid_types = {"why_query", "code_modification", "debugging", "architectural_reasoning", "bug_fix"}
     if t["type"] not in valid_types:
         raise ValueError(f"Task {t['id']} has invalid type '{t['type']}'. Must be one of: {valid_types}")
 

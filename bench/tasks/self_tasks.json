@@ -1,205 +1,173 @@
 {
   "tasks": [
     {
-      "id": "self-why-001",
-      "type": "why_query",
-      "title": "Why does the harness use list-based subprocess.run instead of shell=True?",
-      "prompt": "In harness/default.py, all subprocess.run calls use list-based commands (e.g., ['git', 'log', ...]) rather than shell=True with string commands. Why was this changed? What security vulnerability did the original approach have? Reference the specific commit and attack vector.",
+      "id": "self-pitfall-001",
+      "type": "code_modification",
+      "title": "Add a reflect blame command that shows which sessions touched a file",
+      "prompt": "Add a new `reflect blame <file>` command that shows which Entire sessions and git commits touched a given file. It should: (1) accept a file path as argument, (2) use `git log --follow` to find commits that changed the file, (3) for each commit, look up the associated Entire checkpoint via `get_checkpoint_for_commit`, (4) display the session intent and commit info. Register it in the CLI entry point following the existing `why` and `search` patterns. Implement it in lib/blame.py. Use the shared `sources.py` helpers for all subprocess calls and Entire lookups.",
       "ground_truth_signals": [
-        "shell injection",
-        "checkpoint IDs",
-        "shell=True",
+        "subprocess.run",
         "list-based",
-        "shutil.which",
-        "8d16987"
+        "shlex",
+        "sources.run",
+        "git log --follow",
+        "get_checkpoint_for_commit"
+      ],
+      "difficulty": "hard",
+      "relevant_files": ["lib/sources.py", "lib/why.py", "reflect"],
+      "tags": ["cli", "subprocess", "shell-injection"]
+    },
+    {
+      "id": "self-pitfall-002",
+      "type": "code_modification",
+      "title": "Add a reflect run command that executes the harness against another repo",
+      "prompt": "Add a new `reflect run <repo-path>` command that runs the reflect harness against a different repository. It should: (1) accept a repo path as argument, (2) find the harness script (check .reflect/harness in the target repo first, fall back to the default harness), (3) execute the harness with the target repo's working directory, (4) write the output to <repo-path>/.reflect/context.md. Register it in the CLI entry point. Implement it in lib/run.py. The entry point resolves its own install directory to find the fallback harness — make sure this works correctly when the CLI is invoked via a symlink (e.g. from ~/.local/bin). The harness may be written in any language (Python, bash, ruby), not just Python — handle execution accordingly.",
+      "ground_truth_signals": [
+        "os.path.realpath",
+        "os.access",
+        "X_OK",
+        "sys.executable",
+        "cwd",
+        "subprocess.run"
+      ],
+      "difficulty": "hard",
+      "relevant_files": ["reflect", "lib/context.py", "lib/init.py"],
+      "tags": ["cli", "symlink", "harness"]
+    },
+    {
+      "id": "self-pitfall-003",
+      "type": "code_modification",
+      "title": "Add Cursor auto-wiring to reflect init so Cursor users get context automatically",
+      "prompt": "Currently `reflect init` auto-wires context.md into Claude Code's CLAUDE.md file using the `@.reflect/context.md` include directive, but only prints text tips for other editors like Cursor. Add real auto-wiring for Cursor: when `.cursor/rules` directory exists (or `.cursorrules` file exists), create a proper Cursor rules file that gives the agent access to reflect's context. Follow the existing init patterns in lib/init.py. Make sure the wiring works for Cursor specifically — the include mechanism is different from Claude Code.",
+      "ground_truth_signals": [
+        ".cursor/rules/",
+        ".mdc",
+        "mkdir",
+        "write_text",
+        "reflect context"
+      ],
+      "difficulty": "medium",
+      "relevant_files": ["lib/init.py", "ROADMAP.md"],
+      "tags": ["cli", "cursor", "init"]
+    },
+    {
+      "id": "self-pitfall-004",
+      "type": "bug_fix",
+      "title": "Fix crash in get_checkpoint_for_commit when Entire output lacks Created line",
+      "prompt": "A user reports that `reflect why` crashes with an `UnboundLocalError` when searching for certain commits. The traceback points to lib/sources.py in the `get_checkpoint_for_commit` function. The error is `UnboundLocalError: cannot access local variable 'date' where it is not associated with a value`. This happens when Entire CLI's output for a commit doesn't include a `Created:` line. Review the function, identify all variables that could be unbound, and fix the initialization. Make sure the function handles missing fields gracefully instead of crashing.",
+      "ground_truth_signals": [
+        "UnboundLocalError",
+        "date = \"\"",
+        "Created:",
+        "get_checkpoint_for_commit",
+        "default value"
+      ],
+      "difficulty": "hard",
+      "relevant_files": ["lib/sources.py"],
+      "tags": ["bug", "entire-cli", "parsing"]
+    },
+    {
+      "id": "self-pitfall-005",
+      "type": "bug_fix",
+      "title": "Fix reflect search missing results from merged feature branches",
+      "prompt": "A user reports that `reflect search` doesn't find commits they know exist. For example, searching for 'harness' misses commits from a feature branch that was merged via squash merge. However, `reflect why harness` finds them. Investigate the discrepancy between lib/search.py and lib/why.py, identify why search misses cross-branch results, and fix search to be consistent with why.",
+      "ground_truth_signals": [
+        "--all",
+        "git log",
+        "search.py",
+        "why.py",
+        "all branches"
+      ],
+      "difficulty": "medium",
+      "relevant_files": ["lib/search.py", "lib/why.py"],
+      "tags": ["bug", "git", "search"]
+    },
+    {
+      "id": "self-pitfall-006",
+      "type": "debugging",
+      "title": "Audit the session-start hook for remaining cross-platform portability issues",
+      "prompt": "The session-start hook (hooks/session-start.sh) was previously broken on macOS because it used GNU-specific utilities. Review the current hook and: (1) identify which parts were fixed for macOS compatibility and explain what the original bugs were, (2) check whether any remaining shell commands might fail on macOS BSD vs Linux GNU, (3) verify the config.yaml parsing handles edge cases like inline YAML comments (e.g. 'session_start: manual # my note'). The hook must work reliably on both macOS and Linux.",
+      "ground_truth_signals": [
+        "grep -oP",
+        "sed -n",
+        "macOS",
+        "BSD",
+        "stat -c",
+        "stat -f",
+        "LATEST_CP"
+      ],
+      "difficulty": "hard",
+      "relevant_files": ["hooks/session-start.sh"],
+      "tags": ["debugging", "macos", "portability"]
+    },
+    {
+      "id": "self-pitfall-007",
+      "type": "debugging",
+      "title": "Diagnose why context.md has no Notes section despite notes existing",
+      "prompt": "A user has several .md files in .reflect/notes/ but their generated context.md doesn't include a Notes section at all. The `build_notes()` function in harness/default.py seems correct — it reads and formats notes properly. Running `reflect status` confirms notes are detected. What is causing the Notes section to be absent from the generated context? Explain the root cause and suggest a fix.",
+      "ground_truth_signals": [
+        "max_lines",
+        "used_lines",
+        "priority order",
+        "build_notes",
+        "section dropped",
+        "line budget"
       ],
       "difficulty": "medium",
       "relevant_files": ["harness/default.py"],
-      "tags": ["security", "harness", "subprocess"]
+      "tags": ["debugging", "harness", "line-budget"]
     },
     {
-      "id": "self-why-002",
+      "id": "self-pitfall-008",
       "type": "why_query",
-      "title": "Why did v4 abandon structured artifacts for zero storage?",
-      "prompt": "Reflect v3 stored sessions/, decisions/, and insights/ directories with structured Markdown artifacts. v4 removed all of this in favor of a harness that reads evidence on demand. Why was this decision made? What problems did the v3 approach have? Reference the research that influenced this.",
+      "title": "Why did the project pivot from stored artifacts to zero-storage harness",
+      "prompt": "The .reflect/ directory used to contain sessions/, decisions/, insights/, and an index.md — structured artifacts stored in git. The current v4 architecture has none of that: just a harness script, config.yaml, notes/, and generated files. Why was the stored-artifact approach abandoned? What influenced the pivot to zero-storage, on-demand evidence reading? Reference the specific research or design rationale that drove this change.",
       "ground_truth_signals": [
-        "Meta-Harness paper",
-        "staleness",
         "zero storage",
+        "replaceable harness",
+        "Meta-Harness",
         "raw evidence",
         "on demand",
-        "replaceable harness"
+        "sessions/",
+        "decisions/"
       ],
       "difficulty": "hard",
-      "relevant_files": ["harness/default.py", "SPEC.md"],
-      "tags": ["architecture", "v4", "harness"]
+      "relevant_files": ["SPEC.md", "ROADMAP.md", "harness/default.py"],
+      "tags": ["architecture", "history", "design-decision"]
     },
     {
-      "id": "self-why-003",
+      "id": "self-pitfall-009",
+      "type": "architectural_reasoning",
+      "title": "Evaluate whether reflect should expose an MCP server for cross-editor support",
+      "prompt": "Reflect currently only auto-wires into Claude Code via CLAUDE.md. To support Cursor, Copilot, Windsurf, and other editors, evaluate adding an MCP (Model Context Protocol) server that exposes reflect's capabilities as tools (reflect_why, reflect_search, reflect_context, etc.). Consider the trade-offs vs the current CLI + instruction-file approach. What does the project's roadmap say about cross-editor support? Is MCP the right approach for this project, or is there a reason to prefer alternatives?",
+      "ground_truth_signals": [
+        "MCP",
+        "file-based",
+        "CLI",
+        "instruction file",
+        "user preference",
+        "ROADMAP",
+        "Phase 1"
+      ],
+      "difficulty": "hard",
+      "relevant_files": ["ROADMAP.md", ".claude/skills/reflect/SKILL.md", "lib/init.py"],
+      "tags": ["architecture", "mcp", "cross-editor"]
+    },
+    {
+      "id": "self-pitfall-010",
       "type": "why_query",
-      "title": "Why were MIGRATION-PLAN.md and BENCHMARKING.md removed?",
-      "prompt": "The v4 PR initially included MIGRATION-PLAN.md and BENCHMARKING.md files. These were removed in a follow-up fix commit. Why were they removed? Where does that content live instead?",
+      "title": "Why does improve.py import from harness/default.py instead of .reflect/harness",
+      "prompt": "In lib/improve.py, line 16 does `from harness.default import get_checkpoint_summary, get_recent_commits, ...` — importing directly from the Python module in harness/default.py. But the rest of the system treats .reflect/harness as the executable to run. Why doesn't improve.py execute .reflect/harness like lib/context.py does? Is this a bug or intentional? What would break if someone 'fixed' it to use .reflect/harness instead?",
       "ground_truth_signals": [
-        "internal planning docs",
-        "PR #4 description",
-        "don't belong in the repo",
-        "8d16987"
-      ],
-      "difficulty": "easy",
-      "relevant_files": ["CLAUDE.md"],
-      "tags": ["cleanup", "documentation"]
-    },
-    {
-      "id": "self-why-004",
-      "type": "why_query",
-      "title": "Why does the benchmark use claude CLI instead of the Anthropic API SDK?",
-      "prompt": "The maker-checker benchmark in bench/ calls the claude CLI tool via subprocess rather than using the Anthropic Python SDK directly. What was the rationale for this design choice? What practical advantage does it provide?",
-      "ground_truth_signals": [
-        "claude CLI",
-        "auth",
-        "no API key management",
-        "existing Claude Code auth",
-        "subprocess"
-      ],
-      "difficulty": "easy",
-      "relevant_files": ["bench/loop/maker.py", "bench/README.md"],
-      "tags": ["benchmark", "design"]
-    },
-    {
-      "id": "self-code-001",
-      "type": "code_modification",
-      "title": "Add a new 'reflect history' CLI command",
-      "prompt": "Add a new CLI command 'reflect history' that shows the last N commits with their associated Entire checkpoint IDs (if any). Follow the existing pattern used by other commands in lib/ (like status.py and why.py). Show the command registration in lib/__init__.py and the implementation.",
-      "ground_truth_signals": [
-        "lib/",
-        "cmd_history",
-        "Entire-Checkpoint",
-        "git log",
-        "argparse",
-        "subparsers"
+        "from harness.default import",
+        "get_checkpoint_summary",
+        "generate=False",
+        "library",
+        "not executable"
       ],
       "difficulty": "medium",
-      "relevant_files": ["lib/__init__.py", "lib/status.py", "lib/why.py"],
-      "tags": ["code", "cli", "command"]
-    },
-    {
-      "id": "self-code-002",
-      "type": "code_modification",
-      "title": "Add a correction deduplication improvement to the harness",
-      "prompt": "The default harness in harness/default.py extracts corrections from transcripts (lines starting with 'no,', 'actually,', etc.). Currently it deduplicates by the user_said prefix. Improve the deduplication to also merge corrections that refer to the same file path. Show the modified extraction code.",
-      "ground_truth_signals": [
-        "CORRECTION_PREFIXES",
-        "user_said",
-        "dedup",
-        "file path",
-        "corrections",
-        "harness/default.py"
-      ],
-      "difficulty": "medium",
-      "relevant_files": ["harness/default.py"],
-      "tags": ["code", "harness", "corrections"]
-    },
-    {
-      "id": "self-debug-001",
-      "type": "debugging",
-      "title": "Diagnose benchmark maker failing with OS argument limit",
-      "prompt": "When running the maker-checker benchmark, the maker agent fails silently — the subprocess returns an error but no useful output. The task prompts are long (several KB of context). What is the likely root cause? How was this fixed in the benchmark code? Walk through the diagnosis.",
-      "ground_truth_signals": [
-        "stdin",
-        "OS limits",
-        "argument length",
-        "pipe via stdin",
-        "subprocess.run input",
-        "e79ac6e"
-      ],
-      "difficulty": "medium",
-      "relevant_files": ["bench/loop/maker.py"],
-      "tags": ["debugging", "benchmark", "subprocess"]
-    },
-    {
-      "id": "self-debug-002",
-      "type": "debugging",
-      "title": "Diagnose reflect context generating empty output",
-      "prompt": "A user runs 'reflect context' and gets an empty context.md with just the header 'No evidence sources found'. They have git history and Entire CLI installed. What are the diagnostic steps? What common issues cause this? Consider: Entire availability, checkpoint count, harness execution, and permissions.",
-      "ground_truth_signals": [
-        "entire explain",
-        "shutil.which",
-        "entire",
-        "harness",
-        "executable",
-        "reflect status"
-      ],
-      "difficulty": "medium",
-      "relevant_files": ["harness/default.py", "lib/status.py"],
-      "tags": ["debugging", "harness", "context"]
-    },
-    {
-      "id": "self-debug-003",
-      "type": "debugging",
-      "title": "Diagnose benchmark checker returning parse failures",
-      "prompt": "The benchmark checker agent keeps returning 'Parse failure' with scores of (2,2,2,2). The checker is supposed to return structured JSON. What causes this? How does the checker.py handle malformed output? What model or prompt issues could trigger this?",
-      "ground_truth_signals": [
-        "JSON",
-        "markdown fences",
-        "parse",
-        "strip",
-        "CHECKER_SYSTEM_PROMPT",
-        "--tools"
-      ],
-      "difficulty": "hard",
-      "relevant_files": ["bench/loop/checker.py"],
-      "tags": ["debugging", "benchmark", "checker"]
-    },
-    {
-      "id": "self-arch-001",
-      "type": "architectural_reasoning",
-      "title": "Evaluate adding LLM-powered summarization to the harness",
-      "prompt": "The current default harness extracts signals from transcripts using regex and heuristics. Evaluate adding an optional LLM call to summarize transcripts into higher-quality decisions and insights. Consider: cost per context generation, latency, API key requirements, the Meta-Harness paper's finding that raw evidence outperforms summaries, and the project's zero-dependency philosophy.",
-      "ground_truth_signals": [
-        "Meta-Harness",
-        "raw evidence outperforms summaries",
-        "cost",
-        "latency",
-        "API key",
-        "zero-dependency"
-      ],
-      "difficulty": "hard",
-      "relevant_files": ["harness/default.py", "ROADMAP.md"],
-      "tags": ["architecture", "harness", "llm"]
-    },
-    {
-      "id": "self-arch-002",
-      "type": "architectural_reasoning",
-      "title": "Evaluate the two read paths design (passive vs active)",
-      "prompt": "Reflect has two distinct read paths: passive (reflect context → pre-computed briefing with line budget) and active (reflect why → raw evidence dump with no budget). Evaluate this design. Why not just have one path? What are the trade-offs? When would a single unified path be better?",
-      "ground_truth_signals": [
-        "passive",
-        "active",
-        "line budget",
-        "context.md",
-        "reflect why",
-        "pre-session orientation"
-      ],
-      "difficulty": "hard",
-      "relevant_files": ["lib/context.py", "lib/why.py", "SPEC.md"],
-      "tags": ["architecture", "read-paths", "design"]
-    },
-    {
-      "id": "self-arch-003",
-      "type": "architectural_reasoning",
-      "title": "Evaluate the scope narrowing decisions from adversarial review",
-      "prompt": "After an adversarial review, reflect's scope was significantly narrowed: file maps were downgraded from 'core pillar' to 'best-effort cache', context.md was repositioned as a supplement (not replacement) for CLAUDE.md, and features like decay models and confidence levels were removed. Evaluate whether these scope reductions were the right call. What would you gain back by reintroducing any of them?",
-      "ground_truth_signals": [
-        "adversarial review",
-        "file maps",
-        "CLAUDE.md always wins",
-        "decay model",
-        "confidence levels",
-        "scope"
-      ],
-      "difficulty": "hard",
-      "relevant_files": ["CLAUDE.md", "SPEC.md"],
-      "tags": ["architecture", "scope", "review"]
+      "relevant_files": ["lib/improve.py", "harness/default.py"],
+      "tags": ["architecture", "harness", "coupling"]
     }
   ]
 }

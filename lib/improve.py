@@ -14,8 +14,8 @@ from pathlib import Path
 # Import from the harness to reuse evidence readers
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
 from harness.default import (
-    get_entire_checkpoints,
-    get_entire_transcript,
+    get_checkpoint_summary,
+    get_recent_commits,
     has_entire,
     has_git,
     run,
@@ -27,97 +27,69 @@ def analyze_context_quality(context_md):
     issues = []
     lines = context_md.strip().split("\n")
 
+    in_section = None
     for i, line in enumerate(lines):
-        # Detect session intents leaking as decisions (user prompts, not real decisions)
-        if line.startswith("- ") and "→" in line:
-            # Check if the "decision" is actually just a user question/prompt
-            parts = line.split("→")
-            if len(parts) == 2:
-                intent = parts[0].strip("- ").strip()
-                commit_msg = parts[1].strip().strip("`")
-                # User questions leaking as decisions
-                if any(intent.lower().startswith(q) for q in [
-                    "question", "help me", "how ", "what ", "why ", "can ",
-                    "i want", "let's", "please",
-                ]):
-                    issues.append({
-                        "type": "noise",
-                        "line": i + 1,
-                        "detail": f"User prompt leaked as decision: '{intent[:60]}...'",
-                        "fix_hint": "Filter checkpoints where intent looks like a user question, not a task",
-                    })
-                # Commit message is just echoing the intent
-                if _similarity(intent.lower(), commit_msg.lower()) > 0.6:
-                    issues.append({
-                        "type": "echo",
-                        "line": i + 1,
-                        "detail": f"Commit message echoes intent — no signal added",
-                        "fix_hint": "Skip decisions where commit message ~= intent (no transformation happened)",
-                    })
-                # Truncation artifacts
-                if commit_msg.endswith("...") or intent.endswith("..."):
-                    issues.append({
-                        "type": "truncation",
-                        "line": i + 1,
-                        "detail": "Truncated text in decision — reader can't act on it",
-                        "fix_hint": "Summarize rather than truncate, or skip entries that don't fit",
-                    })
-
-        # Vague focus keywords
-        if line.startswith("Recent work touches:"):
-            words = line.split(":")[1].strip().rstrip(".").split(", ")
-            vague = [w for w in words if len(w) <= 3 or w in [
-                "add", "get", "set", "run", "use", "fix", "new", "update",
-            ]]
-            if len(vague) > len(words) // 2:
+        # Track current section and detect empty sections
+        if line.startswith("## "):
+            # Check if previous section was empty (two headers in a row)
+            if in_section and i > 0 and lines[i - 1].startswith("## "):
                 issues.append({
-                    "type": "vague_focus",
+                    "type": "empty_section",
                     "line": i + 1,
-                    "detail": f"Focus keywords too generic: {vague}",
-                    "fix_hint": "Use bigrams or filter out action verbs from focus keywords",
+                    "detail": f"Empty section: {in_section}",
+                    "fix_hint": "Section has no content — either remove it or investigate why",
                 })
+            in_section = line[3:].strip()
+            continue
+
+        # Detect truncation artifacts in any bullet
+        if line.startswith("- ") and line.rstrip().endswith("..."):
+            issues.append({
+                "type": "truncation",
+                "line": i + 1,
+                "detail": f"Truncated text in {in_section or 'unknown'} section — reader can't act on it",
+                "fix_hint": "Summarize rather than truncate, or skip entries that don't fit",
+            })
+
+        # Detect sessions without AI summaries (commit-message fallback: "- DATE: `commit msg`")
+        if in_section == "Session History" and line.startswith("- ") and ": `" in line and not line.startswith("- **"):
+            issues.append({
+                "type": "no_summary",
+                "line": i + 1,
+                "detail": "Session fell back to commit message — no AI summary available",
+                "fix_hint": "Run `entire explain -c <checkpoint_id> --generate` or set `auto_generate: true` in .reflect/config.yaml",
+            })
 
     return issues
 
 
-def analyze_transcript_gaps(checkpoints):
+def analyze_summary_gaps(summaries):
     """Find things sessions needed that the harness didn't surface."""
     gaps = []
 
-    for cp in checkpoints[:5]:
-        transcript = get_entire_transcript(cp["id"], max_lines=300)
-        if not transcript:
+    for s in summaries[:5]:
+        cp_id = s.get("checkpoint_id", "")[:12]
+        intent = s.get("intent", "")[:80]
+
+        # Sessions without generated summaries are themselves a gap
+        if s.get("outcome") == "(not generated)":
+            gaps.append({
+                "session": cp_id,
+                "intent": intent,
+                "type": "no_summary",
+                "detail": f"No AI summary generated — run `entire explain -c {cp_id} --generate`",
+                "examples": [],
+            })
             continue
 
-        lines = transcript.split("\n")
-        user_lines = [l for l in lines if l.startswith("[User]")]
-        assistant_lines = [l for l in lines if l.startswith("[Assistant]")]
-
-        # Detect repeated explanations — user re-explaining the same thing
-        explained_topics = []
-        for ul in user_lines:
-            text = ul.split("] ", 1)[-1].lower() if "] " in ul else ""
-            if len(text) > 30:
-                explained_topics.append(text[:80])
-
-        # Detect the agent searching for context it should have had
-        search_patterns = []
-        for al in assistant_lines:
-            text = al.split("] ", 1)[-1] if "] " in al else ""
-            # Agent grepping for project info = context gap
-            if any(kw in text.lower() for kw in [
-                "let me search", "let me find", "let me look",
-                "let me check", "searching for",
-            ]):
-                search_patterns.append(text[:100])
-
-        if search_patterns:
+        # Friction items suggest the harness could pre-surface warnings
+        for f in s.get("friction", []):
             gaps.append({
-                "session": cp["id"][:12],
-                "intent": cp.get("intent", "")[:80],
-                "type": "agent_searching",
-                "detail": f"Agent spent time searching — harness could pre-surface this",
-                "examples": search_patterns[:3],
+                "session": cp_id,
+                "intent": intent,
+                "type": "friction_not_surfaced",
+                "detail": f"Friction encountered: {f[:100]}",
+                "examples": [],
             })
 
     return gaps
@@ -166,10 +138,17 @@ def cmd_improve(args):
         sections.append("```")
         sections.append("")
 
-    # 2. Transcript gaps
-    if has_entire():
-        checkpoints = get_entire_checkpoints()[:6]
-        gaps = analyze_transcript_gaps(checkpoints)
+    # 2. Summary gaps
+    if has_entire() and has_git():
+        commits = get_recent_commits(limit=10)
+        summaries = []
+        seen = set()
+        for sha in commits:
+            s = get_checkpoint_summary(sha, generate=False)
+            if s and s["checkpoint_id"] and s["checkpoint_id"] not in seen:
+                seen.add(s["checkpoint_id"])
+                summaries.append(s)
+        gaps = analyze_summary_gaps(summaries)
         sections.append("## Evidence Gaps")
         if gaps:
             for gap in gaps:

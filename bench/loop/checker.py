@@ -1,4 +1,4 @@
-"""Checker agent — evaluates maker output against a structured rubric via claude CLI."""
+"""Checker agent — evaluates actual code diffs from sandbox sessions via claude CLI."""
 
 import json
 import subprocess
@@ -7,40 +7,44 @@ from dataclasses import dataclass
 from ..config import BenchmarkConfig, CheckerScores, Task, TokenUsage
 
 CHECKER_SYSTEM_PROMPT = """\
-You are a senior code reviewer evaluating an AI coding agent's response \
-to a software engineering task. You evaluate strictly against the rubric \
-below. You do NOT have access to project context yourself — you evaluate \
-based on internal consistency, technical correctness, and evidence grounding \
-of the response.
+You are a senior code reviewer evaluating an AI coding agent's work on a \
+software engineering task. You are given the TASK the agent was asked to do, \
+the GIT DIFF of what the agent actually changed, and the agent's SESSION \
+TRANSCRIPT (its reasoning and tool use).
+
+Evaluate the ACTUAL CODE CHANGES (the diff), not just the agent's words.
 
 ## Evaluation Rubric
 
 Score each dimension 1-5:
 
-### 1. Correctness (weight: 0.30)
-- 5: Technically accurate, no errors
-- 4: Minor inaccuracies that don't affect the conclusion
-- 3: Some errors but core answer is right
-- 2: Significant errors that undermine the answer
-- 1: Fundamentally wrong
+### 1. Correctness (weight: 0.35)
+- 5: The diff correctly solves the stated problem, no bugs introduced
+- 4: Solves the problem with minor issues that don't affect core functionality
+- 3: Partially solves the problem, or solves it with notable issues
+- 2: Attempt is on the right track but doesn't actually fix the problem
+- 1: Wrong approach, broken code, or no meaningful changes
 
 ### 2. Completeness (weight: 0.25)
-- 5: Addresses all aspects of the task thoroughly
-- 4: Covers main points, minor gaps
-- 3: Covers the basics but misses important aspects
-- 2: Major gaps in coverage
-- 1: Barely addresses the task
+- 5: All aspects of the task are addressed in the diff
+- 4: Main task is done, minor aspects missing
+- 3: Core task done but significant aspects missing
+- 2: Only partially addresses the task
+- 1: Barely touches the task
 
-### 3. Evidence Grounding (weight: 0.25)
-- 5: Every claim cites specific evidence (commit SHAs, session IDs, file paths)
-- 4: Most claims are grounded, few unsupported assertions
-- 3: Mix of grounded and ungrounded claims
-- 2: Mostly assertions without evidence
-- 1: No evidence cited, or fabricated evidence
+### 3. Code Quality (weight: 0.25)
+- 5: Production-ready code, follows project patterns, clean diff
+- 4: Good code with minor style/pattern issues
+- 3: Functional but messy or doesn't follow project conventions
+- 2: Poor quality, hacks, or overly complex
+- 1: Non-functional or harmful changes
 
-### 4. Code/Reasoning Quality (weight: 0.20)
-For code tasks: production-ready (5) to non-functional (1)
-For reasoning tasks: rigorous analysis (5) to superficial (1)
+### 4. Awareness (weight: 0.15)
+- 5: Agent clearly understood project context, referenced relevant history/patterns
+- 4: Shows good awareness of the codebase, uses appropriate patterns
+- 3: Basic awareness, some project-specific knowledge used
+- 2: Generic approach, didn't leverage project context
+- 1: Showed no awareness of the project
 
 ## Output Format
 Respond with ONLY valid JSON (no markdown fences, no other text):
@@ -49,17 +53,17 @@ Respond with ONLY valid JSON (no markdown fences, no other text):
   "scores": {
     "correctness": <1-5>,
     "completeness": <1-5>,
-    "evidence_grounding": <1-5>,
-    "code_quality": <1-5>
+    "code_quality": <1-5>,
+    "awareness": <1-5>
   },
-  "ground_truth_hits": ["<signal found in response>"],
-  "ground_truth_misses": ["<signal NOT found in response>"],
-  "feedback": "<specific, actionable feedback if verdict is revise, empty string if accept>",
-  "rationale": "<brief explanation of scores>"
+  "ground_truth_hits": ["<signal found in the diff or transcript>"],
+  "ground_truth_misses": ["<signal NOT found>"],
+  "feedback": "<what would need to change for accept, empty if accept>",
+  "rationale": "<1-2 sentence explanation of the key score drivers>"
 }
 
-Accept when weighted_score >= 4.0 AND no individual score is below 3.
-Otherwise, set verdict to "revise" and provide specific feedback."""
+Accept when weighted_score >= 3.5 AND correctness >= 3.
+Otherwise verdict = "revise" with specific feedback."""
 
 
 @dataclass
@@ -78,23 +82,34 @@ class CheckerAgent:
     def __init__(self, config: BenchmarkConfig):
         self.config = config
 
-    def evaluate(self, task: Task, maker_output: str) -> CheckerResponse:
-        """Evaluate a maker's output against the task rubric."""
+    def evaluate(self, task: Task, diff: str, transcript: str) -> CheckerResponse:
+        """Evaluate actual code changes from a sandbox session."""
         signals_list = "\n".join(f"- {s}" for s in task.ground_truth_signals)
+
+        # Truncate diff/transcript — keep head + tail to avoid missing key parts
+        diff_text = _smart_truncate(diff, 8000) if diff else "(no changes made)"
+        transcript_text = _smart_truncate(transcript, 6000) if transcript else "(no transcript)"
 
         user_message = f"""## Task Given to the Agent
 {task.prompt}
 
-## Agent's Response
-{maker_output}
+## Git Diff (what the agent actually changed)
+```diff
+{diff_text}
+```
+
+## Session Transcript (agent's reasoning, truncated)
+{transcript_text}
 
 ## Ground Truth Signals
-The following concepts/keywords SHOULD appear in a correct response:
+The following should appear in a correct solution:
 {signals_list}
 
-Missing signals indicate incomplete understanding. Present signals confirm grounding.
-
-Evaluate the response and return your JSON verdict."""
+Evaluate the DIFF for correctness, completeness, and code quality.
+Use the TRANSCRIPT to assess awareness — did the agent reference project history, \
+past decisions, or context that informed its approach? This is where reflect's \
+impact is most visible.
+Return your JSON verdict."""
 
         result = _call_claude_checker(
             user_message, CHECKER_SYSTEM_PROMPT,
@@ -112,7 +127,6 @@ Evaluate the response and return your JSON verdict."""
             clean = raw.strip()
             if clean.startswith("```"):
                 lines = clean.split("\n")
-                # Remove first and last lines (fences)
                 clean = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
                 clean = clean.strip()
 
@@ -133,10 +147,10 @@ Evaluate the response and return your JSON verdict."""
         return CheckerResponse(
             verdict=data.get("verdict", "revise"),
             scores=CheckerScores(
-                correctness=scores.get("correctness", 1),
-                completeness=scores.get("completeness", 1),
-                evidence_grounding=scores.get("evidence_grounding", 1),
-                code_quality=scores.get("code_quality", 1),
+                correctness=_clamp_score(scores.get("correctness", 1)),
+                completeness=_clamp_score(scores.get("completeness", 1)),
+                evidence_grounding=_clamp_score(scores.get("awareness", scores.get("evidence_grounding", 1))),
+                code_quality=_clamp_score(scores.get("code_quality", 1)),
             ),
             ground_truth_hits=data.get("ground_truth_hits", []),
             ground_truth_misses=data.get("ground_truth_misses", []),
@@ -147,15 +161,33 @@ Evaluate the response and return your JSON verdict."""
         )
 
 
+def _smart_truncate(text: str, max_chars: int) -> str:
+    """Keep head + tail of text to avoid missing important parts."""
+    if len(text) <= max_chars:
+        return text
+    head_size = int(max_chars * 0.6)
+    tail_size = int(max_chars * 0.3)
+    omitted = len(text) - head_size - tail_size
+    return f"{text[:head_size]}\n\n... ({omitted:,} chars omitted) ...\n\n{text[-tail_size:]}"
+
+
+def _clamp_score(val) -> int:
+    """Clamp a score value to 1-5 integer range."""
+    try:
+        n = int(val)
+    except (TypeError, ValueError):
+        return 1
+    return max(1, min(5, n))
+
+
 def _call_claude_checker(prompt: str, system_prompt: str, model: str, max_tokens: int, retries: int = 1) -> dict:
     """Call claude CLI in print mode, piping prompt via stdin. Retries on transient errors."""
     cmd = [
         "claude", "-p",
         "--model", model,
         "--output-format", "json",
-        "--max-turns", "1",
-        "--tools", "",
-        "--system-prompt", system_prompt,
+        "--max-budget-usd", "0.10",
+        "--append-system-prompt", system_prompt,
     ]
 
     for attempt in range(1 + retries):

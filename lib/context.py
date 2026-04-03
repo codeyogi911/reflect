@@ -37,13 +37,14 @@ def cmd_context(args):
     # Use the harness directly if executable, otherwise fall back to Python
     harness_cmd = [str(harness)] if os.access(harness, os.X_OK) else [sys.executable, str(harness)]
 
+    # Longer timeout: harness may generate AI summaries via Entire CLI
     try:
         result = subprocess.run(
             harness_cmd + flags,
-            capture_output=True, text=True, timeout=60
+            capture_output=True, text=True, timeout=600
         )
     except subprocess.TimeoutExpired:
-        print("Harness timed out after 60 seconds.", file=sys.stderr)
+        print("Harness timed out after 600 seconds.", file=sys.stderr)
         return 1
 
     if result.returncode != 0:

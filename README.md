@@ -77,21 +77,19 @@ Evidence Sources                     reflect
 ```
 
 1. **Evidence already exists** — Entire captures full session transcripts (what the agent did, what the human corrected, what was decided). Git captures commits.
-2. **Harness reads on demand** — no copying, no intermediate storage. The harness is a Python script that fetches evidence and extracts signals: corrections, decisions, hot files, open threads.
+2. **Harness reads on demand** — no copying, no intermediate storage. The harness is a Python script that fetches evidence and extracts only hard-to-derive signals: non-obvious learnings, landmines, open threads.
 3. **Context briefing generated** — a prioritized Markdown summary wired into the agent's instruction file.
 4. **Active queries bypass the briefing** — `reflect why` dumps raw evidence for the agent to reason over directly. Raw traces outperform summaries ([Meta-Harness, 2026](https://arxiv.org/abs/2603.28052)).
 
 ### What the harness extracts
 
-The default harness reads Entire session transcripts and pulls out:
+The default harness reads Entire's AI-generated session summaries and keeps only what's **hard to derive** from code or git alone:
 
-- **Corrections** — when a human said "no, not that" or "actually, do X instead"
-- **Key decisions** — intent + commit pairs showing what was tried and what landed
-- **Hot areas** — files touched across multiple sessions (likely complex or unstable)
-- **Open threads** — sessions with intent but no commits (unfinished work)
-- **Current focus** — topic keywords from recent sessions
+- **Non-obvious learnings** — constraints, gotchas, and patterns you can't see by reading the code (file:line references and code-structure facts are filtered out)
+- **Landmines** — friction and pain points from past sessions so you don't hit them again
+- **Open threads** — unfinished work across sessions, auto-pruned against newer outcomes
 
-This is not a git log. It's everything *around* the code — what was considered, what was rejected, what the human corrected, what's still in progress, and where complexity concentrates.
+Session history, hot files, and code-structure facts are deliberately excluded — an agent can get those in 1-2 commands (`entire explain --short`, `git log --stat`, read the file). The context budget goes to signals that require crunching multiple session transcripts.
 
 ---
 
@@ -102,9 +100,7 @@ git clone https://github.com/codeyogi911/reflect.git
 cd reflect && ./install.sh
 ```
 
-This installs:
-- `reflect` CLI to `~/.local/bin/`
-- `/reflect` skill for Claude Code to `~/.claude/skills/`
+This installs the `reflect` CLI to `~/.local/bin/`. The Claude Code skill ships in-repo at `.claude/skills/reflect/` (project-local). Remove `~/.claude/skills/reflect` if you still have a symlink from an older install.
 
 Then in any git repo:
 ```bash

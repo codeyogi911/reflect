@@ -72,10 +72,10 @@ class CheckerScores:
     @property
     def weighted_score(self) -> float:
         return (
-            self.correctness * 0.30
+            self.correctness * 0.35
             + self.completeness * 0.25
-            + self.evidence_grounding * 0.25
-            + self.code_quality * 0.20
+            + self.code_quality * 0.25
+            + self.evidence_grounding * 0.15  # "awareness" in checker rubric
         )
 
     def to_dict(self):

@@ -11,10 +11,10 @@ Repo-owned memory for AI coding agents. Reads raw evidence from Entire CLI sessi
 - `reflect` — CLI entry point (Python)
 - `lib/` — CLI modules (sources, context, init, why, search, status, note)
 - `harness/default.py` — default harness script (reads Entire + git, writes context)
-- `SKILL.md` — Claude Code skill definition (thin wrapper around CLI)
+- `skill/SKILL.md` — skill source (dev copy; install copies to `.claude/skills/reflect/`)
 - `SPEC.md` — specification for `.reflect/` directory format
-- `hooks/session-start.sh` — SessionStart hook for context freshness
-- `install.sh` — installer (symlinks CLI + skill)
+- `hooks/session-start.sh` — SessionStart hook for context freshness (also linked from the skill dir)
+- `install.sh` — installer (symlinks CLI to `~/.local/bin`)
 - `README.md` — user-facing docs
 - `ROADMAP.md` — future phases
 - `CLAUDE.md` — this file
@@ -23,9 +23,9 @@ Repo-owned memory for AI coding agents. Reads raw evidence from Entire CLI sessi
 
 - Edit `harness/default.py` to change default context generation
 - Edit `lib/` to change CLI commands
-- Edit `SKILL.md` to change the Claude Code skill behavior
+- Edit `skill/SKILL.md` to change the Claude Code skill (source of truth)
 - Test locally: `python3 reflect context` or `python3 reflect why <topic>`
-- Install via `./install.sh` (symlinks, so changes propagate immediately)
+- Install CLI via `./install.sh`; the skill is project-local under `.claude/skills/reflect/`
 
 ## Session Insights
 
