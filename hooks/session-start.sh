@@ -38,11 +38,18 @@ else
     NEEDS_UPDATE=true
   fi
 
-  # Check if local reflect files changed since last run
-  LAST_RUN_TS=$(stat -f '%m' .reflect/.last_run 2>/dev/null || echo "0")
+  # Check if local reflect files changed since last run (cross-platform mtime)
+  get_mtime() {
+    if stat -c '%Y' /dev/null >/dev/null 2>&1; then
+      stat -c '%Y' "$1" 2>/dev/null || echo "0"
+    else
+      stat -f '%m' "$1" 2>/dev/null || echo "0"
+    fi
+  }
+  LAST_RUN_TS=$(get_mtime .reflect/.last_run)
   for f in .reflect/harness .reflect/config.yaml .reflect/notes/*.md; do
     if [ -e "$f" ]; then
-      FILE_TS=$(stat -f '%m' "$f" 2>/dev/null || echo "0")
+      FILE_TS=$(get_mtime "$f")
       if [ "$FILE_TS" -gt "$LAST_RUN_TS" ]; then
         NEEDS_UPDATE=true
         break

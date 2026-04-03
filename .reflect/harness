@@ -4,6 +4,7 @@
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -11,10 +12,16 @@ from pathlib import Path
 
 
 def run(cmd, timeout=30):
-    """Run a shell command and return stdout, or empty string on failure."""
+    """Run a command and return stdout, or empty string on failure.
+
+    cmd can be a list (preferred) or a string (split via shlex, no shell).
+    """
+    if isinstance(cmd, str):
+        import shlex
+        cmd = shlex.split(cmd)
     try:
         result = subprocess.run(
-            cmd, shell=True, capture_output=True, text=True, timeout=timeout
+            cmd, capture_output=True, text=True, timeout=timeout
         )
         return result.stdout.strip() if result.returncode == 0 else ""
     except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -23,17 +30,17 @@ def run(cmd, timeout=30):
 
 def has_entire():
     """Check if Entire CLI is available."""
-    return bool(run("which entire"))
+    return shutil.which("entire") is not None
 
 
 def has_git():
     """Check if we're in a git repo."""
-    return bool(run("git rev-parse --is-inside-work-tree"))
+    return bool(run(["git", "rev-parse", "--is-inside-work-tree"]))
 
 
 def get_entire_checkpoints():
     """Get all checkpoints from Entire CLI."""
-    raw = run("entire explain --short --search-all --no-pager")
+    raw = run(["entire", "explain", "--short", "--search-all", "--no-pager"])
     if not raw:
         return []
 
@@ -80,7 +87,7 @@ def get_entire_checkpoints():
 def get_entire_transcript(checkpoint_id, max_lines=100):
     """Get full transcript for a checkpoint, truncated."""
     raw = run(
-        f"entire explain --checkpoint {checkpoint_id} --full --no-pager", timeout=15
+        ["entire", "explain", "--checkpoint", checkpoint_id, "--full", "--no-pager"], timeout=15
     )
     if not raw:
         return ""
@@ -90,7 +97,7 @@ def get_entire_transcript(checkpoint_id, max_lines=100):
 
 def get_git_log(count=15):
     """Get recent git commits."""
-    raw = run(f'git log --oneline -{count} --format="%h %ad %s" --date=short')
+    raw = run(["git", "log", "--oneline", f"-{count}", "--format=%h %ad %s", "--date=short"])
     if not raw:
         return []
     commits = []
