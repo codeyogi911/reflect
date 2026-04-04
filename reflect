@@ -21,6 +21,7 @@ from lib.status import cmd_status
 from lib.improve import cmd_improve
 from lib.sessions import cmd_sessions
 from lib.timeline import cmd_timeline
+from lib.metrics import cmd_metrics
 
 
 def main():
@@ -63,6 +64,29 @@ def main():
     # reflect improve
     subparsers.add_parser("improve", help="Analyze harness effectiveness, suggest changes")
 
+    # reflect metrics
+    met = subparsers.add_parser(
+        "metrics",
+        help="Print metrics JSON and/or export shields.io badge endpoint files",
+    )
+    met.add_argument(
+        "--export",
+        metavar="DIR",
+        dest="export_dir",
+        default=None,
+        help="Write shields endpoint JSON files into DIR",
+    )
+    met.add_argument(
+        "--no-json",
+        action="store_true",
+        help="Do not print JSON to stdout (use with --export)",
+    )
+    met.add_argument(
+        "--generate-summaries",
+        action="store_true",
+        help="Allow Entire to generate missing summaries (slow; default off)",
+    )
+
     args = parser.parse_args()
 
     if args.command is None:
@@ -78,6 +102,7 @@ def main():
         "sessions": cmd_sessions,
         "timeline": cmd_timeline,
         "improve": cmd_improve,
+        "metrics": cmd_metrics,
     }
 
     return commands[args.command](args)

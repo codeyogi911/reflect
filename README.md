@@ -9,6 +9,25 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/codeyogi911/reflect/actions/workflows/ci.yml"><img src="https://github.com/codeyogi911/reflect/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <img src="https://img.shields.io/badge/python-3.11%2B-informational" alt="Python 3.11+">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License MIT"></a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcodeyogi911%2Freflect%2Fmain%2Fdocs%2Fbadges%2Fcheckpoints.json" alt="checkpoints">
+  <img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcodeyogi911%2Freflect%2Fmain%2Fdocs%2Fbadges%2Fsessions_total.json" alt="sessions (Entire)">
+  <img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcodeyogi911%2Freflect%2Fmain%2Fdocs%2Fbadges%2Fsessions_window.json" alt="sessions in 7d window">
+  <img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcodeyogi911%2Freflect%2Fmain%2Fdocs%2Fbadges%2Ftokens.json" alt="tokens 7d">
+  <img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcodeyogi911%2Freflect%2Fmain%2Fdocs%2Fbadges%2Fcache_hit.json" alt="cache hit">
+  <img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcodeyogi911%2Freflect%2Fmain%2Fdocs%2Fbadges%2Flearnings.json" alt="learnings">
+  <img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcodeyogi911%2Freflect%2Fmain%2Fdocs%2Fbadges%2Fpitfalls.json" alt="pitfalls">
+  <img src="https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fcodeyogi911%2Freflect%2Fmain%2Fdocs%2Fbadges%2Fopen_threads.json" alt="open threads">
+</p>
+
+<p align="center"><sub>Snapshot metrics from the maintainer&rsquo;s machine: run <code>reflect metrics --export docs/badges --no-json</code> with <a href="https://entire.dev">Entire CLI</a> enabled, then commit <code>docs/badges/*.json</code>. Shields.io reads those files from <code>main</code>; numbers are not computed per visitor.</sub></p>
+
+<p align="center">
   <a href="#the-problem">Problem</a> &middot;
   <a href="#how-it-works">How It Works</a> &middot;
   <a href="#install">Install</a> &middot;
@@ -139,6 +158,8 @@ reflect search "JWT bug"             # grep across all sources
 ```bash
 reflect init                     # set up .reflect/ in current repo
 reflect status                   # show available evidence sources
+reflect metrics                  # print JSON metrics (tokens, sessions, harness signals)
+reflect metrics --export docs/badges --no-json   # refresh README badge endpoints (commit JSON)
 ```
 
 ### Claude Code skill

@@ -1,11 +1,11 @@
 """reflect status — show available evidence sources."""
 
 import json
+import os
 import sys
-from collections import Counter
-from datetime import datetime, timedelta
 from pathlib import Path
-from .sources import has_entire, has_git, run, get_entire_sessions, get_session_info
+from .aggregates import token_window_stats
+from .sources import has_entire, has_git, run
 
 
 def cmd_status(args):
@@ -51,7 +51,6 @@ def cmd_status(args):
     context = reflect_dir / "context.md"
     last_run = reflect_dir / ".last_run"
     if context.exists():
-        import os
         from datetime import datetime
         mtime = datetime.fromtimestamp(os.path.getmtime(context))
         print(f"**Context**: last generated {mtime.strftime('%Y-%m-%d %H:%M')}")
@@ -74,42 +73,14 @@ def cmd_status(args):
 
 def _show_token_analytics(days=7, max_sessions=30):
     """Show token usage and hot areas from recent sessions."""
-    sessions = get_entire_sessions()
-    if not sessions:
+    stats = token_window_stats(days=days, max_sessions=max_sessions, filter_project=True)
+    if not stats:
         return
 
-    cutoff = datetime.now().astimezone() - timedelta(days=days)
-    total_tokens = 0
-    total_cache_read = 0
-    session_count = 0
-    file_counter = Counter()
-
-    for s in sessions[:max_sessions]:
-        info = get_session_info(s["session_id"], filter_project=True)
-        if not info:
-            continue
-        try:
-            started = datetime.fromisoformat(info["started_at"])
-            # Ensure both are tz-aware for comparison
-            if started.tzinfo is None:
-                started = started.astimezone()
-            if started < cutoff:
-                break  # sessions are ordered by recency
-        except (ValueError, KeyError, TypeError):
-            continue
-
-        tokens = info.get("tokens", {})
-        total_tokens += tokens.get("total", 0)
-        total_cache_read += tokens.get("cache_read", 0)
-        session_count += 1
-        for f in info.get("files_touched", []):
-            file_counter[f] += 1
-
-    if session_count == 0:
-        return
-
-    cache_pct = round(total_cache_read / total_tokens * 100) if total_tokens > 0 else 0
-    avg_tokens = total_tokens // session_count
+    session_count = stats["sessions_in_window"]
+    total_tokens = stats["total_tokens"]
+    cache_pct = stats["cache_hit_pct"]
+    avg_tokens = stats["avg_tokens_per_session"]
 
     print(f"\n## Token Usage (last {days} days)\n")
     print(f"  Sessions: {session_count}")
@@ -126,12 +97,11 @@ def _show_token_analytics(days=7, max_sessions=30):
     else:
         print(f"  Avg session: {avg_tokens} tokens")
 
-    # Hot areas: files touched across multiple sessions
-    hot = [(f, c) for f, c in file_counter.most_common(8) if c >= 2]
+    hot = stats["hot_areas"]
     if hot:
         print(f"\n## Hot Areas (cross-session)\n")
-        for filepath, count in hot:
-            print(f"  {filepath} — {count} of {session_count} sessions")
+        for h in hot:
+            print(f"  {h['path']} — {h['count']} of {session_count} sessions")
 
 
 def _is_default_harness(harness_path):
