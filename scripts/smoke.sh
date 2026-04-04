@@ -9,6 +9,9 @@ trap 'rm -rf "$TMP"' EXIT
 cp "$ROOT/reflect" "$TMP/reflect"
 chmod +x "$TMP/reflect"
 cp -R "$ROOT/lib" "$TMP/lib"
+cp -R "$ROOT/templates" "$TMP/templates"
+cp -R "$ROOT/skill" "$TMP/skill"
+cp -R "$ROOT/hooks" "$TMP/hooks"
 
 cd "$TMP"
 git init -q
