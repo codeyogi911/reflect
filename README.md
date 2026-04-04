@@ -32,7 +32,7 @@
   <a href="#how-it-works">How It Works</a> &middot;
   <a href="#install">Install</a> &middot;
   <a href="#commands">Commands</a> &middot;
-  <a href="#the-harness">The Harness</a> &middot;
+  <a href="#format-config">Format Config</a> &middot;
   <a href="SPEC.md">Spec</a>
 </p>
 
@@ -48,66 +48,56 @@ An agent that resolved 50 incidents has seen patterns — which fixes worked, wh
 
 This is the **context lake** problem ([Zohar Einy, 2026](https://thenewstack.io/hidden-agentic-technical-debt/)): agents need two kinds of context that most setups don't provide.
 
-**Runtime context** — live data about services, ownership, recent deployments. Static markdown files go stale the moment they're written. Ownership transfers, dependencies change, config values update. The agent doesn't know.
+**Runtime context** — live data about services, ownership, recent deployments. Static markdown files go stale the moment they're written.
 
-**History** — what was tried, why it was decided, what went wrong, what the human corrected, what's still unfinished. Without this, agents repeat mistakes that humans (or other agents) have already resolved. LLM providers are starting to address this with `memory.md` files, but that memory is siloed per tool, per machine, per developer.
+**History** — what was tried, why it was decided, what went wrong, what the human corrected, what's still unfinished. Without this, agents repeat mistakes that humans (or other agents) have already resolved.
 
-Reflect solves this half of the problem at the repo level — not just decisions, but corrections, abandoned approaches, hot areas, open threads, and the full reasoning trail behind the code.
+Reflect solves the history half at the repo level — not just decisions, but corrections, abandoned approaches, hot areas, open threads, and the full reasoning trail behind the code.
 
 ---
 
 ## What Reflect Does (and Doesn't)
 
 **Does:**
-- Makes the past queryable — `reflect why` dumps raw evidence from session transcripts and git history so agents (or humans) can find out *why* something is the way it is, what was tried before, and what went wrong
-- Keeps context fresh — a harness script regenerates from live sources on every session start, not from a static file someone wrote weeks ago
-- Travels with the repo — the harness is committed to git, so every clone gets it
-- Works with any AI tool — the output is plain Markdown that gets wired into instruction files (currently Claude Code via `CLAUDE.md`)
+- Makes the past queryable — `reflect why` dumps raw evidence from session transcripts and git history so agents (or humans) can find out *why* something is the way it is
+- Keeps context fresh — a subagent regenerates from live sources on every session start, not from a static file someone wrote weeks ago
+- Travels with the repo — the format config is committed to git, so every clone gets it
+- Works with any AI tool — the output is plain Markdown with references that any agent can follow up on
 
 **Doesn't:**
 - Replace runtime context from service catalogs, deployment systems, or live infrastructure
 - Work across team members or machines (session history comes from [Entire CLI](https://entire.dev) on the local machine)
 - Provide agent registry, governance, or orchestration
-- Do much without Entire CLI — git history alone gives you commit messages, not the reasoning behind them
 
-**Scope:** Individual developers or small teams sharing a repo. The organizational-scale problems (agent sprawl, credential governance, cross-team coordination) need a different kind of tool.
+**Scope:** Individual developers or small teams sharing a repo.
 
 ---
 
 ## How It Works
 
 ```
-Evidence Sources                     reflect
-┌─────────────────────────┐         ┌──────────────────────┐
-│  Entire CLI sessions    │────────>│                      │
-│  (transcripts, intents, │         │   .reflect/harness   │
-│   corrections, decisions)│         │   (replaceable script)│
-│                         │         │                      │
-│  Git history            │────────>│   Reads on demand.   │
-│  (commits, diffs, blame)│         │   No intermediate    │
-│                         │         │   storage.           │
-└─────────────────────────┘         └──────────┬───────────┘
-                                               │
-                                         context.md
-                                               │
-                                         CLAUDE.md
-                                    (or any instruction file)
+Evidence Sources              reflect
+┌─────────────────────┐      ┌─────────────────────────┐
+│  Entire CLI sessions │─────>│                         │
+│  (transcripts,       │      │  format.yaml (sections) │
+│   decisions, friction)│      │         +               │
+│                      │      │  Claude subagent         │
+│  Git history         │─────>│  (synthesizes briefing)  │
+│  (commits, diffs)    │      │                         │
+└──────────────────────┘      └────────────┬────────────┘
+                                           │
+                                     context.md
+                                     (with references)
+                                           │
+                                     CLAUDE.md
+                                (or any instruction file)
 ```
 
 1. **Evidence already exists** — Entire captures full session transcripts (what the agent did, what the human corrected, what was decided). Git captures commits.
-2. **Harness reads on demand** — no copying, no intermediate storage. The harness is a Python script that fetches evidence and extracts only hard-to-derive signals: non-obvious learnings, landmines, open threads.
-3. **Context briefing generated** — a prioritized Markdown summary wired into the agent's instruction file.
-4. **Active queries bypass the briefing** — `reflect why` dumps raw evidence for the agent to reason over directly. Raw traces outperform summaries ([Meta-Harness, 2026](https://arxiv.org/abs/2603.28052)).
-
-### What the harness extracts
-
-The default harness reads Entire's AI-generated session summaries and keeps only what's **hard to derive** from code or git alone:
-
-- **Non-obvious learnings** — constraints, gotchas, and patterns you can't see by reading the code (file:line references and code-structure facts are filtered out)
-- **Landmines** — friction and pain points from past sessions so you don't hit them again
-- **Open threads** — unfinished work across sessions, auto-pruned against newer outcomes
-
-Session history, hot files, and code-structure facts are deliberately excluded — an agent can get those in 1-2 commands (`entire explain --short`, `git log --stat`, read the file). The context budget goes to signals that require crunching multiple session transcripts.
+2. **Evidence gathered on demand** — no copying, no intermediate storage. The pipeline reads Entire + git and builds a normalized evidence document.
+3. **Subagent synthesizes** — a Claude subagent reads the evidence and `format.yaml` (which declares what sections you want), produces a context briefing with references. Without Claude CLI, a deterministic fallback slots each checkpoint's parsed fields (learnings, friction, open items) directly into the matching sections — no AI, but still structured and referenced.
+4. **Every bullet has a reference** — `(checkpoint abc123)`, `(commit def456)` — so the consuming agent can dig deeper with `entire explain --checkpoint` or `git show`.
+5. **Active queries bypass the briefing** — `reflect why` dumps raw evidence for the agent to reason over directly.
 
 ---
 
@@ -118,22 +108,30 @@ git clone https://github.com/codeyogi911/reflect.git
 cd reflect && ./install.sh
 ```
 
-This installs the `reflect` CLI to `~/.local/bin/`. The Claude Code skill ships in-repo at `.claude/skills/reflect/` (project-local). Remove `~/.claude/skills/reflect` if you still have a symlink from an older install.
+This installs the `reflect` CLI to `~/.local/bin/`.
 
 Then in any git repo:
-```bash
-reflect init      # creates .reflect/ with default harness
-reflect context   # generates your first context briefing
-```
-
-### Entire CLI (recommended)
-
-Reflect's main value comes from session transcripts captured by [Entire CLI](https://entire.dev). Without it, you get git history only — commit messages, not decision traces.
 
 ```bash
-# Install Entire CLI separately — see https://entire.dev
-entire enable     # start capturing sessions in this repo
+reflect init
 ```
+
+**That's it.** `reflect init` handles everything:
+- Installs [Entire CLI](https://entire.dev) if not found
+- Enables Entire for the repo
+- Creates `.reflect/` with default `format.yaml` and `config.yaml`
+- Installs the Claude Code skill (`.claude/skills/reflect/`)
+- Wires `@.reflect/context.md` into `CLAUDE.md`
+
+Reflect works best with [Entire CLI](https://entire.dev) for session transcripts — `reflect init` installs it automatically. Without Entire, you get git-only context (commit messages, not decision traces).
+
+Then generate your first briefing:
+
+```bash
+reflect context
+```
+
+On a fresh repo with no Entire sessions, context will be sparse — just git history. It gets richer as you accumulate sessions. Cost: ~$0.01/run with Claude CLI (Haiku), free with deterministic fallback.
 
 ---
 
@@ -142,7 +140,7 @@ entire enable     # start capturing sessions in this repo
 ### Generate context briefing
 
 ```bash
-reflect context                  # run harness, write context.md
+reflect context                  # gather evidence, synthesize, write context.md
 ```
 
 ### Query raw evidence
@@ -156,10 +154,12 @@ reflect search "JWT bug"             # grep across all sources
 ### Manage
 
 ```bash
-reflect init                     # set up .reflect/ in current repo
+reflect init                     # one-stop setup (Entire + .reflect/ + skill + wiring)
+reflect init --migrate           # migrate from legacy harness to format.yaml
 reflect status                   # show available evidence sources
-reflect metrics                  # print JSON metrics (tokens, sessions, harness signals)
-reflect metrics --export docs/badges --no-json   # refresh README badge endpoints (commit JSON)
+reflect improve                  # analyze context quality, suggest format.yaml changes
+reflect metrics                  # print JSON metrics (tokens, sessions, signals)
+reflect metrics --export docs/badges --no-json   # refresh README badge endpoints
 ```
 
 ### Claude Code skill
@@ -169,45 +169,83 @@ reflect metrics --export docs/badges --no-json   # refresh README badge endpoint
 /reflect why auth middleware     # evidence + AI narrative
 /reflect search JWT              # search all sources
 /reflect status                  # evidence overview
-/reflect improve                 # analyze harness quality, propose fixes
+/reflect improve                 # analyze quality, propose format changes
+```
+
+### Auto-refresh on session start
+
+A SessionStart hook checks if evidence has changed (new commits, new Entire checkpoints, modified config) and automatically regenerates context when a Claude Code session begins. Configure in `.reflect/config.yaml`:
+
+```yaml
+session_start: auto     # regenerate automatically (default)
+session_start: manual   # show a reminder instead
 ```
 
 ---
 
-## The Harness
+## Format Config
 
-The harness is the core idea — a replaceable script at `.reflect/harness` that reads raw evidence and generates `context.md`.
+Context generation is controlled by `.reflect/format.yaml` — a declarative config that defines what sections appear in the briefing.
 
-### Why a script, not a schema
+```yaml
+sections:
+  - name: Key Decisions & Rationale
+    purpose: why things are the way they are, not what they are
+    max_bullets: 8
+    recency: 30d
 
-The [Meta-Harness paper](https://arxiv.org/abs/2603.28052) (Stanford/MIT, 2026) showed that the code determining what context an AI sees matters as much as the model itself. Hand-designed memory structures underperform letting agents search raw evidence.
+  - name: Gotchas & Friction
+    purpose: things that burned time or surprised the agent
+    max_bullets: 6
+    recency: 14d
 
-A static schema can't adapt. A script can:
-- Be customized per repo (a backend service needs different context than a design system)
-- Be A/B tested (run two harnesses against the same evidence, compare results)
-- Self-improve (`/reflect improve` analyzes harness output quality and proposes edits)
+  - name: Incomplete or Abandoned Work
+    purpose: things that were started but not finished, or reverted — context, not instructions
+    max_bullets: 5
+    recency: 7d
 
-### Default harness
-
-Reads Entire CLI + git, ranks by recency, extracts signals (corrections, decisions, hot files, open threads), produces a Markdown briefing. Deliberately simple.
-
-### Custom harness
-
-Replace `.reflect/harness` with any script that follows the contract:
-
-```
-reads: Entire CLI + git (on demand)
-writes: context to stdout
-flags: --max-lines, --format
+citations: required
+max_lines: 150
 ```
 
-What a custom harness could do:
-- Use an LLM to summarize sessions before generating context
-- Implement semantic search with embeddings
-- Fetch from additional sources (PRs, CI logs, Slack)
-- Add confidence levels and decay
+### Customizing for your project
 
-The harness is committed to git — different repos evolve different harnesses.
+Edit the sections to match what your project needs. Examples:
+
+```yaml
+# Backend service
+sections:
+  - name: API Contracts
+    purpose: breaking changes, version mismatches, migration gotchas
+    max_bullets: 8
+    recency: 30d
+
+  - name: Performance Landmines
+    purpose: queries or patterns that caused incidents
+    max_bullets: 5
+    recency: 14d
+
+  - name: Incomplete or Abandoned Work
+    purpose: things that were started but not finished, or reverted — context, not instructions
+    max_bullets: 5
+    recency: 7d
+```
+
+The section names and purposes are instructions to the subagent — it reads them and fills each section from the evidence. No code required.
+
+### How synthesis works
+
+1. **Evidence gathering** (fixed, internal) — reads checkpoints from Entire CLI and commits from git
+2. **Subagent synthesis** — passes evidence + format.yaml to Claude CLI (`claude-haiku-4-5` by default, ~$0.01/run)
+3. **Validation** — checks citations present, line budget respected, sections populated
+4. **Deterministic fallback** — if Claude CLI is unavailable, maps parsed checkpoint fields to sections directly
+
+### Environment overrides
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `REFLECT_MODEL` | `claude-haiku-4-5-20251001` | Model for synthesis |
+| `REFLECT_CONTEXT_BUDGET` | `0.05` | Max spend per synthesis run |
 
 ---
 
@@ -215,10 +253,10 @@ The harness is committed to git — different repos evolve different harnesses.
 
 | Path | Command | How it works |
 |------|---------|-------------|
-| **Passive** | `reflect context` | Runs harness, writes context.md (pre-session briefing) |
+| **Passive** | `reflect context` | Synthesizes briefing via subagent, writes context.md |
 | **Active** | `reflect why <topic>` | Fetches raw evidence, dumps to stdout (agent reasons over it) |
 
-The passive path is a pre-computed summary — good enough for orientation. The active path gives the agent raw evidence when it needs the full story.
+The passive path is a pre-computed summary with references — good for orientation. The active path gives the agent raw evidence when it needs the full story.
 
 ---
 
@@ -226,13 +264,13 @@ The passive path is a pre-computed summary — good enough for orientation. The 
 
 ```
 .reflect/
-├── harness             # the replaceable context-generation script
+├── format.yaml         # section config (committed to git)
 ├── context.md          # generated briefing (gitignored)
-├── config.yaml         # optional settings
+├── config.yaml         # operational settings (committed)
 └── .last_run           # freshness state (gitignored)
 ```
 
-Evidence lives in Entire and git — reflect just reads it. No sessions/, no decisions/, no insights/.
+Evidence lives in Entire and git — reflect just reads it.
 
 See [`SPEC.md`](SPEC.md) for the full specification.
 
@@ -241,32 +279,33 @@ See [`SPEC.md`](SPEC.md) for the full specification.
 ## FAQ
 
 **Does this work without Entire CLI?**
-Partially. Git history is always available, so you get commit messages and file history. But the real value — corrections, reasoning, abandoned approaches, open threads — comes from Entire session transcripts.
+Partially. Git history is always available, so you get commit messages and file history. But the real value — corrections, reasoning, abandoned approaches, open threads — comes from Entire session transcripts. `reflect init` installs Entire automatically if it's not found.
 
 **Will it modify my code?**
-No. It only writes to `.reflect/` and auto-wires `@.reflect/context.md` into `CLAUDE.md` on first run.
+No. It only writes to `.reflect/` and `.claude/skills/reflect/`, and auto-wires `@.reflect/context.md` into `CLAUDE.md` on first run.
 
 **What about `.reflect/` in git?**
-Commit: `harness`, `config.yaml`. Gitignore: `context.md`, `.last_run`.
-
-**I used `.reflect/notes/` in an older version — what now?**
-Reflect no longer reads that folder. Move anything you still need into your normal project docs (README, ADRs, etc.) or rely on Entire session evidence and `reflect why`.
+Commit: `format.yaml`, `config.yaml`. Gitignore: `context.md`, `.last_run`.
 
 **Does this work across team members?**
-Not yet. Session history comes from Entire on the local machine. If two developers both use Entire in the same repo, they each see only their own sessions. Team-scale memory is a future goal, not a current capability.
+Not yet. Session history comes from Entire on the local machine. Team-scale memory is a future goal.
 
 **How is this different from Claude's built-in memory?**
-Claude's memory lives in `~/.claude/projects/` on your laptop. It doesn't travel with the repo, isn't visible to other tools, and can't be customized. Reflect's harness is committed to git, produces tool-agnostic Markdown, and is a replaceable program you can optimize.
+Claude's memory lives in `~/.claude/projects/` on your laptop. It doesn't travel with the repo, isn't visible to other tools, and can't be customized. Reflect's format config is committed to git, produces tool-agnostic Markdown with references, and is customizable per project.
+
+**I used `.reflect/harness` or `.reflect/notes/` in an older version — what now?**
+Run `reflect init --migrate` to move from the legacy harness to `format.yaml`. Notes are no longer used — rely on Entire session evidence and `reflect why`.
 
 ---
 
 ## Contributing
 
 1. Fork the repo
-2. Edit `harness/default.py` to change default context generation
-3. Edit `lib/` to change CLI commands
-4. Changes take effect immediately via symlinks
-5. Submit a PR
+2. Edit `lib/evidence.py` to change evidence gathering
+3. Edit `lib/context.py` to change synthesis pipeline or system prompt
+4. Edit `lib/` to change CLI commands
+5. Changes take effect immediately via symlinks
+6. Submit a PR
 
 ## License
 

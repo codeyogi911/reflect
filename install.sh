@@ -20,10 +20,11 @@ SKILL_DST="$TARGET_REPO/.claude/skills/reflect"
 mkdir -p "$SKILL_DST"
 cp "$SKILL_SRC" "$SKILL_DST/SKILL.md"
 
-# Link hooks if they exist
+# Copy hooks if they exist
 HOOKS_DIR="$SCRIPT_DIR/hooks"
 if [ -d "$HOOKS_DIR" ]; then
-    ln -sfn "$HOOKS_DIR" "$SKILL_DST/hooks"
+    rm -rf "$SKILL_DST/hooks"
+    cp -R "$HOOKS_DIR" "$SKILL_DST/hooks"
 fi
 
 echo "Skill installed: $SKILL_DST/SKILL.md"

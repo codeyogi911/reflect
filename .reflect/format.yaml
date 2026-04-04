@@ -1,0 +1,32 @@
+# reflect format configuration
+# Sections define what the context briefing contains.
+# Edit section names and purposes to customize for your project.
+# The subagent fills each section from session evidence + git history.
+
+sections:
+  - name: Key Decisions & Rationale
+    purpose: why things are the way they are, not what they are
+    max_bullets: 8
+    recency: 30d
+
+  - name: Gotchas & Friction
+    purpose: things that burned time or surprised the agent
+    max_bullets: 6
+    recency: 14d
+
+  - name: Open Work
+    purpose: unfinished items a new session should pick up
+    max_bullets: 5
+    recency: 7d
+
+  - name: Abandoned Approaches
+    purpose: high-cost dead ends an agent would plausibly retry — each entry MUST include why it failed and when to reconsider
+    max_bullets: 5
+    recency: 90d
+    entry_fields:
+      - approach        # what was tried
+      - reason          # why it was abandoned (the non-obvious part)
+      - revisit_when    # condition that would make it worth retrying, or "never"
+
+citations: required
+max_lines: 150

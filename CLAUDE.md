@@ -4,13 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Repo-owned memory for AI coding agents. Reads raw evidence from Entire CLI sessions and git history on demand via a replaceable harness script. No intermediate storage — the harness fetches evidence at context-generation time. Generates context briefings (`context.md`) that any AI tool can read.
+Repo-owned memory for AI coding agents. Reads raw evidence from Entire CLI sessions and git history on demand. Uses a declarative `format.yaml` to control what sections appear in context, and a Claude subagent to synthesize high-quality briefings with references. Generates context briefings (`context.md`) that any AI tool can read.
 
 ## Structure
 
 - `reflect` — CLI entry point (Python)
-- `lib/` — CLI modules (sources, context, init, why, search, status)
-- `harness/default.py` — default harness script (reads Entire + git, writes context)
+- `lib/` — CLI modules (evidence, context, init, why, search, status, improve)
+- `lib/evidence.py` — fixed evidence gathering pipeline (Entire CLI + git)
 - `skill/SKILL.md` — skill source (dev copy; install copies to `.claude/skills/reflect/`)
 - `SPEC.md` — specification for `.reflect/` directory format
 - `hooks/session-start.sh` — SessionStart hook for context freshness (also linked from the skill dir)
@@ -21,8 +21,10 @@ Repo-owned memory for AI coding agents. Reads raw evidence from Entire CLI sessi
 
 ## Development
 
-- Edit `harness/default.py` to change default context generation
+- Edit `lib/evidence.py` to change evidence gathering
+- Edit `lib/context.py` to change synthesis pipeline, system prompt, or validation
 - Edit `lib/` to change CLI commands
+- Edit `.reflect/format.yaml` (in any repo) to customize context sections
 - Edit `skill/SKILL.md` to change the Claude Code skill (source of truth)
 - Test locally: `python3 reflect context` or `python3 reflect why <topic>`
 - Install CLI via `./install.sh`; the skill is project-local under `.claude/skills/reflect/`

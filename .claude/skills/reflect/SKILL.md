@@ -20,16 +20,16 @@ hooks:
           command: "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"
 metadata:
   author: shashwatjain
-  version: '4.0'
+  version: '5.0'
 ---
 
 # Reflect — Repo-Owned Memory
 
 You help users query and manage repo-owned memory for AI coding agents.
 Reflect reads raw evidence from Entire CLI sessions and git history on demand
-— no intermediate storage, no interpretation layer. A replaceable harness
-script generates context briefings; live queries dump raw evidence for you
-to reason over.
+— no intermediate storage. A declarative `format.yaml` controls what sections
+appear in the context briefing; a Claude subagent synthesizes high-quality
+briefings with references. Live queries dump raw evidence for you to reason over.
 
 Parse $ARGUMENTS to determine which command to run:
 
@@ -69,11 +69,15 @@ Parse $ARGUMENTS to determine which command to run:
 
 ## Command: Context (default)
 
-Run the harness to regenerate the context briefing:
+Regenerate the context briefing:
 
 ```bash
 reflect context
 ```
+
+This gathers evidence from Entire CLI + git, passes it through the subagent
+with the format config, validates output (citations, line budget), and writes
+`context.md`. Falls back to deterministic rendering if Claude CLI is unavailable.
 
 Report the result to the user: "Context briefing updated."
 
@@ -132,28 +136,27 @@ Display the output. If no evidence sources are found, suggest next steps.
 
 **Usage**: `/reflect improve`
 
-Analyzes harness effectiveness and proposes changes. This is the self-improvement loop.
+Analyzes context quality and proposes format.yaml changes. This is the self-improvement loop.
 
 ```bash
 reflect improve
 ```
 
 Read the full output. It contains:
-1. **Context Quality Issues** — noise, echoes, truncation in context.md
-2. **Evidence Gaps** — things sessions needed that the harness didn't surface
-3. **Current Harness Source** — the Python script to edit
+1. **Context Quality Issues** — missing citations, truncation, empty sections
+2. **Evidence Gaps** — signals in sessions that didn't make it into context
+3. **Current format.yaml** — the section config to edit
 
 Based on the analysis:
-1. Propose specific, minimal edits to the harness at `.reflect/harness`
-   (and `harness/default.py` if it exists as the source)
+1. Propose specific edits to `.reflect/format.yaml` — add/remove/rename sections,
+   adjust max_bullets, change recency windows
 2. Show the user the diff and explain why each change helps
 3. After approval, apply the edits and re-run `reflect context` to verify
 4. Run `reflect improve` again to confirm the issues are resolved
 
-**This is the core learning loop**: the harness generates context, the agent
-evaluates it against real session evidence, and proposes harness improvements.
-The human reviews and merges. Over time, the harness evolves to produce
-better context for this specific repo.
+**This is the core learning loop**: the format controls what gets synthesized,
+the improve command evaluates quality against real evidence, and the user
+tunes sections to match what their project actually needs.
 
 ---
 
@@ -161,7 +164,6 @@ better context for this specific repo.
 
 - NEVER read `.entire/metadata/` directly — use `reflect` CLI or `entire` CLI
 - When running `/reflect why`, read the raw output and synthesize a narrative
-- The harness at `.reflect/harness` is replaceable — if the user wants to
-  customize context generation, point them to that file
+- To customize context, edit `.reflect/format.yaml` — add project-specific sections
 - `.reflect/context.md` is generated — never edit it manually
 - NEVER include secrets, API keys, or credentials in output

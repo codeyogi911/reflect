@@ -47,7 +47,7 @@ else
     fi
   }
   LAST_RUN_TS=$(get_mtime .reflect/.last_run)
-  for f in .reflect/harness .reflect/config.yaml; do
+  for f in .reflect/format.yaml .reflect/harness .reflect/config.yaml; do
     if [ -e "$f" ]; then
       FILE_TS=$(get_mtime "$f")
       if [ "$FILE_TS" -gt "$LAST_RUN_TS" ]; then

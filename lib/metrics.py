@@ -13,49 +13,18 @@ from .sources import (
     has_git,
     run,
 )
-
-# Reuse harness evidence readers (same pattern as lib/improve.py)
-_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-if _REPO_ROOT not in sys.path:
-    sys.path.insert(0, _REPO_ROOT)
-
-from harness.default import (  # noqa: E402
-    build_friction,
-    build_learnings,
-    build_open_items,
-    get_checkpoint_summary,
-    get_recent_commits,
-)
+from .evidence import gather_evidence
 
 
-def _collect_summaries(generate=False):
-    """Gather checkpoint summaries like the default harness (max 10, dedupe by checkpoint)."""
-    summaries = []
-    if not has_git():
-        return summaries
-    commits = get_recent_commits(limit=15)
-    if not has_entire() or not commits:
-        return summaries
-    seen_checkpoints = set()
-    for sha in commits:
-        summary = get_checkpoint_summary(sha, generate=generate)
-        if summary and summary.get("checkpoint_id"):
-            cid = summary["checkpoint_id"]
-            if cid not in seen_checkpoints:
-                seen_checkpoints.add(cid)
-                summaries.append(summary)
-        if len(summaries) >= 10:
-            break
-    return summaries
-
-
-def _bullet_lines(lines):
-    """Count markdown bullets (exclude bold session lines)."""
-    return sum(
-        1
-        for L in lines
-        if L.startswith("- ") and not L.startswith("- **")
-    )
+def _count_items(evidence, field):
+    """Count unique items across checkpoints for a given field."""
+    seen = set()
+    for cp in evidence.get("checkpoints", []):
+        for item in cp.get(field, []):
+            key = item[:60].lower()
+            if key not in seen:
+                seen.add(key)
+    return len(seen)
 
 
 def _format_tokens_short(n):
@@ -102,16 +71,10 @@ def collect_metrics(generate_summaries=False):
         data["cache_hit_pct"] = stats["cache_hit_pct"]
         data["avg_tokens_per_session"] = stats["avg_tokens_per_session"]
 
-    summaries = _collect_summaries(generate=generate_summaries)
-    data["learnings_surfaced"] = _bullet_lines(
-        build_learnings(summaries, max_lines=10_000)
-    )
-    data["friction_surfaced"] = _bullet_lines(
-        build_friction(summaries, max_lines=10_000)
-    )
-    data["open_items_surfaced"] = _bullet_lines(
-        build_open_items(summaries, max_lines=10_000)
-    )
+    evidence = gather_evidence(max_checkpoints=10, auto_generate=generate_summaries)
+    data["learnings_surfaced"] = _count_items(evidence, "learnings")
+    data["friction_surfaced"] = _count_items(evidence, "friction")
+    data["open_items_surfaced"] = _count_items(evidence, "open_items")
 
     return data, None
 

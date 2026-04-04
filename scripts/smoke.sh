@@ -6,11 +6,9 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
-mkdir -p "$TMP/harness"
 cp "$ROOT/reflect" "$TMP/reflect"
 chmod +x "$TMP/reflect"
 cp -R "$ROOT/lib" "$TMP/lib"
-cp "$ROOT/harness/default.py" "$TMP/harness/default.py"
 
 cd "$TMP"
 git init -q
@@ -25,7 +23,7 @@ run() {
 
 run ./reflect
 run ./reflect init
-test -f .reflect/harness
+test -f .reflect/format.yaml
 run ./reflect context
 test -s .reflect/context.md
 run ./reflect status

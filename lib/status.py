@@ -40,12 +40,15 @@ def cmd_status(args):
 
     print()
 
-    # Harness
+    # Format config
+    format_file = reflect_dir / "format.yaml"
     harness = reflect_dir / "harness"
-    if harness.exists():
-        print(f"**Harness**: {harness} (custom)" if not _is_default_harness(harness) else f"**Harness**: default")
+    if format_file.exists():
+        print(f"**Format**: {format_file}")
+    elif harness.exists():
+        print(f"**Mode**: legacy harness (migrate with `reflect init --migrate`)")
     else:
-        print("**Harness**: not installed")
+        print("**Format**: not configured (run `reflect init`)")
 
     # Context freshness
     context = reflect_dir / "context.md"
