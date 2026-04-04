@@ -19,9 +19,9 @@
 ## Quick Start
 
 ```bash
-# Install reflect
-git clone https://github.com/codeyogi911/reflect.git
-cd reflect && ./install.sh
+# Install reflect (from tar)
+curl -fsSL https://github.com/codeyogi911/reflect/releases/latest/download/reflect.tar.gz | tar xz
+cd reflect-* && ./install.sh
 
 # Set up any repo
 cd ~/your-project
@@ -30,6 +30,15 @@ reflect init          # installs Entire CLI, creates .reflect/, wires into CLAUD
 # Generate your first briefing
 reflect context
 ```
+
+<details><summary>Development install (from git clone)</summary>
+
+```bash
+git clone https://github.com/codeyogi911/reflect.git
+cd reflect && ./install.sh
+```
+
+</details>
 
 That's it. Your next Claude Code session will have project history injected automatically.
 
