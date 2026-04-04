@@ -197,6 +197,19 @@ Use the `entire` CLI to explore the raw evidence behind any signal:
 
 ---
 
+## Agent: reflect-query
+
+A `reflect-query` agent ships with this skill (installed to `.claude/agents/`).
+Spawn it for deep investigations that need multiple searches and evidence synthesis.
+It runs autonomously — searches context.md, runs `reflect why` and `reflect search`,
+digs into raw checkpoints, and returns a sourced narrative.
+
+Use it when a question needs more than a single `/reflect why` call — e.g., tracing
+a decision across multiple sessions, comparing what was tried vs what landed, or
+building onboarding context for a new contributor.
+
+---
+
 ## Rules
 
 - NEVER read `.entire/metadata/` directly — use `reflect` CLI or `entire` CLI

@@ -165,10 +165,11 @@ def _reflect_repo_root():
 
 
 def _install_skill():
-    """Copy skill/SKILL.md and hooks/ into .claude/skills/reflect/."""
+    """Copy skill/SKILL.md, hooks/, and agents/ into .claude/."""
     repo_root = _reflect_repo_root()
     skill_src = repo_root / "skill" / "SKILL.md"
     hooks_src = repo_root / "hooks"
+    agents_src = repo_root / "skill" / "agents"
 
     if not skill_src.exists():
         return  # Not running from a reflect repo checkout
@@ -185,6 +186,14 @@ def _install_skill():
         if hooks_dst.exists():
             shutil.rmtree(hooks_dst)
         shutil.copytree(hooks_src, hooks_dst)
+
+    # Copy agents into .claude/agents/
+    if agents_src.is_dir():
+        agents_dst = Path(".claude") / "agents"
+        agents_dst.mkdir(parents=True, exist_ok=True)
+        for agent_file in agents_src.glob("*.md"):
+            shutil.copy2(agent_file, agents_dst / agent_file.name)
+        print(f"Agent installed: .claude/agents/")
 
     print(f"Skill installed: {skill_dst}/SKILL.md")
 
