@@ -139,10 +139,11 @@ Use the `entire` CLI to explore the raw evidence behind any signal:
   ```
 
 **When to dig deeper:**
-- A **Critical Pitfall** exists for the area you're working in → this is a STOP signal. Read the full checkpoint/commit evidence before proceeding. These are agent mistakes that were reverted or caused breakage. Treat them as hard rules until you verify the constraint no longer applies.
-- An **Open Work** item matches what you're about to do → read the checkpoint transcript to understand what was tried and where it left off
-- A **Gotcha** or friction entry seems relevant → verify it's still current and understand the full failure context before working around it
-- A **Key Decision** informs your design → read the original discussion to understand constraints that may not fit in a bullet
+Read `.reflect/format.yaml` to understand which sections exist in context.md.
+Any entry that relates to your current task deserves a deeper look — expand
+the linked checkpoint or commit to get the full story before acting on it.
+Entries about pitfalls, mistakes, or reverted work are STOP signals — read
+the evidence before proceeding.
 
 **When the briefing is enough:**
 - The entry gives you a clear, actionable fact (e.g., "use os.path.realpath not abspath")
@@ -169,6 +170,5 @@ building onboarding context for a new contributor.
 - To customize context, edit `.reflect/format.yaml` — add project-specific sections
 - `.reflect/context.md` is generated — never edit it manually
 - NEVER include secrets, API keys, or credentials in output
-- **Critical Pitfalls are blocking**: if context.md lists a pitfall for the area you're
-  about to change, read the linked evidence BEFORE writing code. These represent past
-  agent mistakes that caused reverts — repeating them wastes the user's time
+- **Pitfall/mistake entries are blocking**: if context.md lists a past mistake or revert
+  for the area you're about to change, read the linked evidence BEFORE writing code
