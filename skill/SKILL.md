@@ -10,7 +10,7 @@ description: >
   repo"), and any question that is best answered by consulting git history
   or past AI session transcripts. Even if the user doesn't say "reflect" or
   "history" explicitly, if the answer lives in the past — use this skill.
-  Commands: /reflect, /reflect why <topic>, /reflect search <query>,
+  Commands: /reflect, /reflect search <query>,
   /reflect status, /reflect improve.
 allowed-tools: Read, Bash, Glob, Grep
 hooks:
@@ -33,12 +33,11 @@ briefings with references. Live queries dump raw evidence for you to reason over
 
 Parse $ARGUMENTS to determine which command to run:
 
-1. `why <file-or-topic>` → go to **Command: Why**
-2. `search <query>` → go to **Command: Search**
-3. `status` → go to **Command: Status**
-4. `context` → go to **Command: Context**
-5. `improve` → go to **Command: Improve**
-6. Everything else (including no arguments) → go to **Command: Context**
+1. `search <query>` → go to **Command: Search**
+2. `status` → go to **Command: Status**
+3. `context` → go to **Command: Context**
+4. `improve` → go to **Command: Improve**
+5. Everything else (including no arguments) → go to **Command: Context**
 
 ---
 
@@ -83,28 +82,6 @@ Report the result to the user: "Context briefing updated."
 
 If the **SessionStart hook** output contains `REFLECT_AUTO_RUN`, run this
 command automatically without user prompting. This keeps the briefing fresh.
-
----
-
-## Command: Why
-
-**Usage**: `/reflect why <file-or-topic>`
-
-This is a live query — it dumps raw evidence for you to reason over.
-
-```bash
-reflect why <file-or-topic>
-```
-
-Read the output and present it as a structured narrative:
-- What sessions touched this file/topic and what happened
-- What decisions were made and why
-- What went wrong (if anything)
-- What the user should know going forward
-
-**You are the intelligence layer.** The CLI gives you raw evidence; you
-construct the "why" story. This is the key design: raw traces outperform
-pre-computed summaries (Meta-Harness, 2026).
 
 ---
 
@@ -187,8 +164,9 @@ Use the `entire` CLI to explore the raw evidence behind any signal:
   ```
 
 **When to dig deeper:**
+- A **Critical Pitfall** exists for the area you're working in → this is a STOP signal. Read the full checkpoint/commit evidence before proceeding. These are agent mistakes that were reverted or caused breakage. Treat them as hard rules until you verify the constraint no longer applies.
 - An **Open Work** item matches what you're about to do → read the checkpoint transcript to understand what was tried and where it left off
-- A **Gotcha** or **Abandoned Approach** seems relevant → verify it's still current and understand the full failure context before working around it
+- A **Gotcha** or friction entry seems relevant → verify it's still current and understand the full failure context before working around it
 - A **Key Decision** informs your design → read the original discussion to understand constraints that may not fit in a bullet
 
 **When the briefing is enough:**
@@ -213,7 +191,9 @@ building onboarding context for a new contributor.
 ## Rules
 
 - NEVER read `.entire/metadata/` directly — use `reflect` CLI or `entire` CLI
-- When running `/reflect why`, read the raw output and synthesize a narrative
 - To customize context, edit `.reflect/format.yaml` — add project-specific sections
 - `.reflect/context.md` is generated — never edit it manually
 - NEVER include secrets, API keys, or credentials in output
+- **Critical Pitfalls are blocking**: if context.md lists a pitfall for the area you're
+  about to change, read the linked evidence BEFORE writing code. These represent past
+  agent mistakes that caused reverts — repeating them wastes the user's time

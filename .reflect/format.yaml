@@ -19,14 +19,14 @@ sections:
     max_bullets: 5
     recency: 7d
 
-  - name: Abandoned Approaches
-    purpose: high-cost dead ends an agent would plausibly retry — each entry MUST include why it failed and when to reconsider
-    max_bullets: 5
+  - name: Critical Pitfalls
+    purpose: agent mistakes, reverted work, and failed approaches — each entry is a DON'T rule backed by evidence of what went wrong
+    max_bullets: 8
     recency: 90d
     entry_fields:
-      - approach        # what was tried
-      - reason          # why it was abandoned (the non-obvious part)
-      - revisit_when    # condition that would make it worth retrying, or "never"
+      - mistake         # what the agent did wrong
+      - consequence     # what broke or had to be reverted
+      - rule            # the "don't do X because Y" directive for future agents
 
 citations: required
 max_lines: 150

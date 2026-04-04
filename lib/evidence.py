@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 from collections import defaultdict
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from lib.sources import run, has_entire, has_git
@@ -20,6 +21,8 @@ def gather_evidence(max_checkpoints=12, auto_generate=True):
     Returns dict:
         checkpoints: list of parsed checkpoint dicts (with raw_text)
         git_log: list of {sha, date, message}
+        reverts: list of {sha, date, message, reverted_sha, reverted_message}
+        pitfalls: list of {description, evidence_type, source_id, related_revert}
         latest_checkpoint_id: str or None
         latest_git_sha: str or None
         stats: {total_checkpoints, total_commits, hot_files}
@@ -27,6 +30,8 @@ def gather_evidence(max_checkpoints=12, auto_generate=True):
     result = {
         "checkpoints": [],
         "git_log": [],
+        "reverts": [],
+        "pitfalls": [],
         "latest_checkpoint_id": None,
         "latest_git_sha": None,
         "stats": {"total_checkpoints": 0, "total_commits": 0, "hot_files": {}},
@@ -78,7 +83,147 @@ def gather_evidence(max_checkpoints=12, auto_generate=True):
             if count >= 2
         }
 
+    # --- Revert detection ---
+    result["reverts"] = _detect_reverts(result["git_log"])
+
+    # --- Pitfall extraction ---
+    result["pitfalls"] = _extract_pitfalls(result["checkpoints"], result["reverts"])
+
     return result
+
+
+def _detect_reverts(git_log):
+    """Find revert commits and pair them with what they reverted."""
+    reverts = []
+    commit_map = {e["sha"]: e for e in git_log}
+
+    for entry in git_log:
+        msg = entry["message"]
+        # Match: Revert "original message" or revert: ... or Revert <sha>
+        revert_match = re.match(r'^[Rr]evert\s+"?(.+?)"?\s*$', msg)
+        if not revert_match:
+            revert_match = re.match(r'^[Rr]evert:?\s+(.+)$', msg)
+        if not revert_match:
+            continue
+
+        reverted_msg = revert_match.group(1).strip()
+        reverted_sha = None
+
+        # Try to find the original commit by message match
+        for other in git_log:
+            if other["sha"] == entry["sha"]:
+                continue
+            if other["message"].strip() == reverted_msg or reverted_msg in other["message"]:
+                reverted_sha = other["sha"]
+                break
+
+        # Also try: git log message might contain the sha directly
+        sha_match = re.search(r'\b([a-f0-9]{7,40})\b', reverted_msg)
+        if not reverted_sha and sha_match:
+            candidate = sha_match.group(1)[:7]
+            if candidate in commit_map:
+                reverted_sha = candidate
+
+        reverts.append({
+            "sha": entry["sha"],
+            "date": entry["date"],
+            "message": msg,
+            "reverted_sha": reverted_sha,
+            "reverted_message": reverted_msg,
+        })
+
+    return reverts
+
+
+def _extract_pitfalls(checkpoints, reverts):
+    """Cross-reference friction + reverts to build explicit pitfall evidence.
+
+    A pitfall is:
+    1. A friction item from a checkpoint whose files overlap with a revert, OR
+    2. A friction item that indicates a failed approach (keywords: "wrong", "broke",
+       "reverted", "had to", "shouldn't", "doesn't work", "failed"), OR
+    3. A revert commit that undoes work from a checkpoint with friction.
+    """
+    pitfalls = []
+    seen = set()
+
+    FAIL_PATTERNS = re.compile(
+        r'(wrong|broke|reverted|had to|shouldn.t|doesn.t work|failed|mistake|'
+        r'wasted|dead.?end|backed out|rolled back|undid|undo|not.work|bug.introduced)',
+        re.IGNORECASE,
+    )
+
+    # Build file→checkpoint map for cross-referencing with reverts
+    file_to_cp = defaultdict(list)
+    for cp in checkpoints:
+        for f in cp.get("files", []):
+            file_to_cp[f].append(cp)
+
+    # 1. Friction items that indicate failure
+    for cp in checkpoints:
+        cp_id = cp["checkpoint_id"][:12]
+        for friction in cp.get("friction", []):
+            if FAIL_PATTERNS.search(friction):
+                key = friction[:80].lower()
+                if key not in seen:
+                    seen.add(key)
+                    pitfalls.append({
+                        "description": friction,
+                        "evidence_type": "friction",
+                        "source_id": f"checkpoint {cp_id}",
+                        "related_revert": None,
+                    })
+
+    # 2. Reverts paired with checkpoint friction
+    for rev in reverts:
+        # Find which checkpoint the reverted commit belonged to
+        for cp in checkpoints:
+            cp_id = cp["checkpoint_id"][:12]
+            cp_shas = {c["sha"][:7] for c in cp.get("commits", [])}
+            reverted = rev.get("reverted_sha", "")
+            if reverted and reverted[:7] in cp_shas:
+                # This revert undoes work from this checkpoint
+                desc = f"Reverted: {rev['reverted_message']}"
+                if cp.get("friction"):
+                    desc += f" (friction: {cp['friction'][0]})"
+                key = desc[:80].lower()
+                if key not in seen:
+                    seen.add(key)
+                    pitfalls.append({
+                        "description": desc,
+                        "evidence_type": "revert+friction",
+                        "source_id": f"commit {rev['sha']}",
+                        "related_revert": rev["sha"],
+                    })
+                break
+
+        # Even without checkpoint match, a revert is a pitfall signal
+        key = rev["message"][:80].lower()
+        if key not in seen:
+            seen.add(key)
+            pitfalls.append({
+                "description": rev["message"],
+                "evidence_type": "revert",
+                "source_id": f"commit {rev['sha']}",
+                "related_revert": rev["sha"],
+            })
+
+    # 3. Learnings that indicate mistakes (weaker signal, but useful)
+    for cp in checkpoints:
+        cp_id = cp["checkpoint_id"][:12]
+        for learning in cp.get("learnings", []):
+            if FAIL_PATTERNS.search(learning):
+                key = learning[:80].lower()
+                if key not in seen:
+                    seen.add(key)
+                    pitfalls.append({
+                        "description": learning,
+                        "evidence_type": "learning",
+                        "source_id": f"checkpoint {cp_id}",
+                        "related_revert": None,
+                    })
+
+    return pitfalls
 
 
 def build_evidence_document(evidence):
@@ -125,6 +270,26 @@ def build_evidence_document(evidence):
         sections.append("## Recent Git History\n")
         for entry in evidence["git_log"]:
             sections.append(f"- {entry['sha']} ({entry['date']}): {entry['message']}")
+        sections.append("")
+
+    # Pitfalls (reverts + failure friction)
+    pitfalls = evidence.get("pitfalls", [])
+    if pitfalls:
+        sections.append("## Pitfalls (mistakes, reverts, failed approaches)\n")
+        for p in pitfalls:
+            tag = p["evidence_type"].upper()
+            sections.append(f"- [{tag}] {p['description']} ({p['source_id']})")
+        sections.append("")
+
+    # Reverts (even if not matched to a checkpoint)
+    reverts = evidence.get("reverts", [])
+    if reverts:
+        sections.append("## Revert Commits\n")
+        for r in reverts:
+            line = f"- {r['sha']} ({r['date']}): {r['message']}"
+            if r.get("reverted_sha"):
+                line += f" [reverts {r['reverted_sha']}]"
+            sections.append(line)
         sections.append("")
 
     # Hot files

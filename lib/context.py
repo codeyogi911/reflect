@@ -41,11 +41,11 @@ DEFAULT_FORMAT = {
             "recency": "7d",
         },
         {
-            "name": "Abandoned Approaches",
-            "purpose": "high-cost dead ends an agent would plausibly retry — each entry MUST include why it failed and when to reconsider",
-            "max_bullets": 5,
+            "name": "Critical Pitfalls",
+            "purpose": "agent mistakes, reverted work, and failed approaches — each entry is a DON'T rule backed by evidence of what went wrong",
+            "max_bullets": 8,
             "recency": "90d",
-            "entry_fields": ["approach", "reason", "revisit_when"],
+            "entry_fields": ["mistake", "consequence", "rule"],
         },
     ],
     "citations": "required",
@@ -180,6 +180,11 @@ WHAT TO INCLUDE (hard-to-derive signals only):
 - Cross-session patterns (things that come up repeatedly)
 - Unfinished work that a new session should know about
 - Architectural constraints not obvious from reading the code
+- **CRITICAL PITFALLS** — the most important category. Look for:
+  - Revert commits (evidence section "Revert Commits" and "Pitfalls")
+  - Friction items that mention failure, wrong approach, broken, reverted
+  - Sequences where something was built then undone in a later checkpoint
+  - Each pitfall MUST be phrased as a "don't" rule: what not to do and why
 
 WHAT TO EXCLUDE:
 - Anything derivable from reading the code (file structure, function names, imports)
@@ -403,7 +408,18 @@ def _deterministic_context(evidence, fmt):
                 if len(bullets) >= section_def["max_bullets"]:
                     break
 
-        elif "open" in name or "work" in name or "unfinished" in name or "incomplete" in name or "abandon" in name:
+        elif "pitfall" in name or "mistake" in name or "don't" in name:
+            pitfalls = evidence.get("pitfalls", [])
+            seen = set()
+            for p in pitfalls:
+                key = p["description"][:60].lower()
+                if key not in seen:
+                    seen.add(key)
+                    bullets.append(f"- **{p['description']}** ({p['source_id']})")
+                if len(bullets) >= section_def["max_bullets"]:
+                    break
+
+        elif "open" in name or "work" in name or "unfinished" in name or "incomplete" in name:
             seen = set()
             for cp in checkpoints:
                 for item in cp.get("open_items", []):

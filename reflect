@@ -15,7 +15,6 @@ sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
 
 from lib.init import cmd_init
 from lib.context import cmd_context
-from lib.why import cmd_why
 from lib.search import cmd_search
 from lib.status import cmd_status
 from lib.improve import cmd_improve
@@ -38,12 +37,6 @@ def main():
     # reflect context
     ctx = subparsers.add_parser("context", help="Generate context.md via subagent synthesis")
     ctx.add_argument("--max-lines", type=int, default=None, help="Line budget override")
-
-    # reflect why
-    why = subparsers.add_parser("why", help="Answer questions about project history")
-    why.add_argument("query", nargs="+", help="File path or topic to search for")
-    why.add_argument("--raw", action="store_true", help="Dump raw evidence without synthesis")
-    why.add_argument("--verbose", "-v", action="store_true", help="Show maker-checker progress and raw evidence")
 
     # reflect search
     search = subparsers.add_parser("search", help="Grep across all evidence sources")
@@ -97,7 +90,6 @@ def main():
     commands = {
         "init": cmd_init,
         "context": cmd_context,
-        "why": cmd_why,
         "search": cmd_search,
         "status": cmd_status,
         "sessions": cmd_sessions,

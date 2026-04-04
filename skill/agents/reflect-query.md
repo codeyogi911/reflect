@@ -15,7 +15,6 @@ past decisions, architecture evolution, and rationale by searching real evidence
 
 2. **Search deeper with reflect CLI**:
    ```bash
-   reflect why <topic>          # structured why-narrative with sources
    reflect search <query>       # grep across all evidence sources
    reflect status               # check what evidence is available
    ```
@@ -28,12 +27,23 @@ past decisions, architecture evolution, and rationale by searching real evidence
    git log --all --oneline --grep=<keyword> # find relevant commits
    ```
 
-4. **Synthesize a clear answer**:
+4. **Check for pitfalls** — before answering, scan for revert commits and
+   failure patterns that reveal what DIDN'T work:
+   ```bash
+   git log --all --oneline --grep="[Rr]evert"  # find reverted work
+   git log --all --oneline --grep="fix:"        # fixes often follow mistakes
+   ```
+   Cross-reference reverts with checkpoint friction to build the full story:
+   what was tried → what broke → what was reverted → what the rule should be.
+
+5. **Synthesize a clear answer**:
    - Lead with the direct answer
    - Include when it happened (dates, commits, checkpoints)
    - Explain *why* — rationale, tradeoffs, constraints
    - Note what changed since, if anything
    - Cite sources: `(checkpoint abc123)`, `(commit abc1234)`
+   - **For pitfalls**: phrase as a "don't" rule — e.g., "Don't use os.path.abspath
+     for symlinked entry points because it resolves to the symlink, not the target"
 
 ## Rules
 
