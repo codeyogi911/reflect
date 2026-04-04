@@ -54,6 +54,6 @@ git history. Never block on a missing tool.
 ## Rules
 
 - Do NOT read `.reflect/context.md` — the caller already has it.
-- Never read `.entire/metadata/` directly — use the CLIs.
+- Never read the `.entire/` directory directly — use the CLIs.
 - Never guess when you can look.
 - If you find contradictory evidence, present both sides with sources.
