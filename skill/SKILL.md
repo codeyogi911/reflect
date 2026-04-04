@@ -160,6 +160,43 @@ tunes sections to match what their project actually needs.
 
 ---
 
+## Digging Deeper from context.md
+
+The injected `context.md` is a briefing — a starting point, not the full story.
+When an entry is relevant to your current task, **go deeper before acting on it**.
+
+Each entry includes a checkpoint reference like `(checkpoint 90e2641946db)`.
+Use the `entire` CLI to explore the raw evidence behind any signal:
+
+- **Expand a checkpoint** — get the full session context behind a context.md entry:
+  ```bash
+  entire explain --checkpoint <id>         # detailed view with prompts + files
+  entire explain --checkpoint <id> --full  # full parsed transcript
+  ```
+
+- **Browse recent sessions** — find relevant sessions for a topic:
+  ```bash
+  entire explain                           # list checkpoints on current branch
+  entire explain --session <id>            # filter to a specific session
+  entire sessions list                     # list all sessions across worktrees
+  ```
+
+- **Explain a commit** — understand what happened around a specific change:
+  ```bash
+  entire explain --commit <sha>
+  ```
+
+**When to dig deeper:**
+- An **Open Work** item matches what you're about to do → read the checkpoint transcript to understand what was tried and where it left off
+- A **Gotcha** or **Abandoned Approach** seems relevant → verify it's still current and understand the full failure context before working around it
+- A **Key Decision** informs your design → read the original discussion to understand constraints that may not fit in a bullet
+
+**When the briefing is enough:**
+- The entry gives you a clear, actionable fact (e.g., "use os.path.realpath not abspath")
+- You're doing unrelated work and the entry is just background context
+
+---
+
 ## Rules
 
 - NEVER read `.entire/metadata/` directly — use `reflect` CLI or `entire` CLI
