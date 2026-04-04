@@ -5,4 +5,7 @@
 .entire/
 __pycache__/
 *.pyc
+dist/
+*.egg-info/
+build/
 bench/results/tmp-*
