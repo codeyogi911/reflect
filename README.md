@@ -19,16 +19,6 @@
 ## Install
 
 ```bash
-# Recommended: pipx (isolated install, like `go install`)
-pipx install reflect-cli
-
-# Or: pip
-pip install reflect-cli
-
-# Or: Homebrew
-brew tap codeyogi911/tap && brew install reflect-cli
-
-# Or: curl installer (auto-detects best method)
 curl -fsSL https://raw.githubusercontent.com/codeyogi911/reflect/main/install.sh | bash
 ```
 

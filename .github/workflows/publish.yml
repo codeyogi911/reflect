@@ -40,15 +40,3 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release create "${{ github.ref_name }}" --generate-notes
 
-  homebrew:
-    needs: pypi
-    runs-on: ubuntu-latest
-    steps:
-      - name: Update Homebrew formula
-        uses: mislav/bump-homebrew-formula-action@v3
-        with:
-          formula-name: reflect-cli
-          homebrew-tap: codeyogi911/homebrew-tap
-          download-url: https://github.com/codeyogi911/reflect/archive/refs/tags/${{ github.ref_name }}.tar.gz
-        env:
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}

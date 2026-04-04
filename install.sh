@@ -3,72 +3,51 @@
 set -euo pipefail
 
 REPO="codeyogi911/reflect"
-INSTALL_DIR="${HOME}/.local/bin"
+CLONE_DIR="${HOME}/.local/share/reflect"
 
-# ── Helpers ─────────────────────────────────────────────────────────
 info()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
-warn()  { printf '\033[1;33mWarning:\033[0m %s\n' "$*"; }
 err()   { printf '\033[1;31mError:\033[0m %s\n' "$*" >&2; exit 1; }
 
 command_exists() { command -v "$1" >/dev/null 2>&1; }
 
-# ── Detect install method ──────────────────────────────────────────
-install_via_pipx() {
-    info "Installing via pipx..."
-    pipx install reflect-cli
-}
+# ── Preflight ──────────────────────────────────────────────────────
+command_exists git    || err "git is required. Install it and try again."
+command_exists python3 || err "python3 is required (3.11+). Install it and try again."
 
-install_via_pip() {
-    info "Installing via pip..."
-    pip install --user reflect-cli
-}
-
-install_via_source() {
-    info "Installing from source..."
-    local clone_dir="${HOME}/.local/share/reflect"
-
-    if [ -d "$clone_dir" ]; then
-        info "Updating existing clone..."
-        git -C "$clone_dir" pull --ff-only origin main
-    else
-        git clone "https://github.com/${REPO}.git" "$clone_dir"
-    fi
-
-    mkdir -p "$INSTALL_DIR"
-    cd "$clone_dir"
-    pip install --user -e . 2>/dev/null || {
-        # Fallback: symlink for systems without pip
-        ln -sf "$clone_dir/reflect" "$INSTALL_DIR/reflect"
-        info "Installed via symlink (pip unavailable)"
+# ── Clone or update ────────────────────────────────────────────────
+if [ -d "$CLONE_DIR" ]; then
+    info "Updating existing install..."
+    git -C "$CLONE_DIR" pull --ff-only origin main 2>/dev/null || {
+        info "Pull failed, re-cloning..."
+        rm -rf "$CLONE_DIR"
+        git clone "https://github.com/${REPO}.git" "$CLONE_DIR"
     }
-}
+else
+    info "Cloning reflect..."
+    git clone "https://github.com/${REPO}.git" "$CLONE_DIR"
+fi
 
-# ── Main ───────────────────────────────────────────────────────────
-main() {
-    info "Installing reflect..."
+# ── Install via pip ────────────────────────────────────────────────
+info "Installing reflect CLI..."
+if command_exists pipx; then
+    pipx install --force "$CLONE_DIR"
+elif command_exists pip; then
+    pip install --user "$CLONE_DIR"
+else
+    # Last resort: install pip via ensurepip, then install
+    python3 -m ensurepip --default-pip 2>/dev/null || true
+    python3 -m pip install --user "$CLONE_DIR" || err "Could not install. Please install pip or pipx and try again."
+fi
 
-    if command_exists pipx; then
-        install_via_pipx
-    elif command_exists pip; then
-        install_via_pip
-    elif command_exists git; then
-        install_via_source
-    else
-        err "No package manager found. Install pipx, pip, or git and try again."
-    fi
-
-    # Verify installation
-    if command_exists reflect; then
-        info "reflect installed successfully!"
-        reflect --help | head -3
-    else
-        warn "reflect was installed but is not on your PATH."
-        echo ""
-        echo "Add this to your shell profile:"
-        echo '  export PATH="$HOME/.local/bin:$PATH"'
-        echo ""
-        echo "Then restart your shell and run: reflect --help"
-    fi
-}
-
-main "$@"
+# ── Verify ─────────────────────────────────────────────────────────
+if command_exists reflect; then
+    info "reflect installed successfully!"
+    echo ""
+    reflect --help | head -3
+else
+    info "Install complete. Add ~/.local/bin to your PATH:"
+    echo ""
+    echo '  export PATH="$HOME/.local/bin:$PATH"'
+    echo ""
+    echo "Then restart your shell and run: reflect --help"
+fi

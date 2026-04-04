@@ -12,7 +12,7 @@ Repo-owned memory for AI coding agents. Reads raw evidence from Entire CLI sessi
 - `reflect_cli/` — Python package (evidence, context, init, why, search, status, improve)
 - `reflect_cli/cli.py` — main entry point (used by pyproject.toml console_scripts)
 - `reflect_cli/evidence.py` — fixed evidence gathering pipeline (Entire CLI + git)
-- `pyproject.toml` — package config for pip/pipx/Homebrew distribution
+- `pyproject.toml` — package config for pip/pipx distribution
 - `skill/SKILL.md` — skill source (dev copy; install copies to `.claude/skills/reflect/`)
 - `SPEC.md` — specification for `.reflect/` directory format
 - `hooks/session-start.sh` — SessionStart hook for context freshness (also linked from the skill dir)
