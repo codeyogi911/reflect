@@ -1,0 +1,3 @@
+# reflect configuration
+max_lines: 150
+session_start: auto
