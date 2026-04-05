@@ -1,10 +1,10 @@
 <p align="center">
   <h1 align="center">reflect</h1>
   <p align="center">
-    <strong>git answers "what changed." reflect answers "why."</strong>
+    <strong>Every session teaches the next one.</strong>
   </p>
   <p align="center">
-    Repo-owned memory for AI coding agents.
+    Cross-session learning for AI coding agents.
   </p>
 </p>
 
@@ -29,35 +29,39 @@ reflect init       # installs Entire CLI, creates .reflect/, wires into CLAUDE.m
 reflect context    # generate your first briefing
 ```
 
-Your next Claude Code session will have project history injected automatically.
+Your next Claude Code session starts with lessons from every prior session.
 
 ---
 
 ## Why
 
-Every agent session starts from zero. An agent doesn't know that another agent tried the same fix last week, that it was rejected because it broke a downstream contract, or that the team decided to deprecate the feature entirely.
+Every agent session starts from zero. Session 12 doesn't know that session 8 tried the same fix and had to revert it, that session 10 discovered a workaround for the flaky API, or that session 11 left the migration half-finished.
 
-Reflect gives agents access to **what was tried, why it was decided, what went wrong, and what's still unfinished** — drawn from [Entire CLI](https://entire.dev) session transcripts and git history. The output is plain Markdown with references that any AI tool can read.
+Reflect reads [Entire CLI](https://entire.dev) session transcripts and git history, then distills cross-session patterns into lessons: **mistakes become rules, friction becomes gotchas, abandoned approaches become warnings, and unfinished work becomes handoffs**. The output is a plain Markdown briefing with references that any AI tool can read.
+
+The more sessions you run, the smarter the next one starts.
 
 ---
 
 ## How It Works
 
 ```
-Entire CLI sessions ──┐
-  (transcripts,        │     format.yaml
-   decisions, friction)├────►  (what sections     ────► context.md
-                       │       you want)                (with references)
-Git history ───────────┘         +                         │
-  (commits, diffs)           Claude subagent               ▼
-                             (synthesizes)             CLAUDE.md
+ Session 1 ──┐
+ Session 2 ──┤  Evidence pipeline     format.yaml          context.md
+ Session 3 ──┼─────────────────────►  (what lessons   ────► "Don't retry the
+   ...       │  extracts signals:      to distill)          batch endpoint —
+ Session N ──┤  friction, reverts,         +                it times out on
+             │  decisions, open work   Claude subagent      payloads > 5MB"
+ Git history ┘  hot files, pitfalls    (synthesizes)        (checkpoint af09)
 ```
 
-1. **Evidence already exists** — [Entire](https://entire.dev) captures full session transcripts. Git captures commits. No extra recording needed.
-2. **Gathered on demand** — no intermediate storage. The pipeline reads sources and builds evidence at synthesis time.
-3. **Subagent synthesizes** — a Claude subagent reads the evidence and your `format.yaml`, produces a briefing with references. Falls back to deterministic rendering without Claude CLI.
-4. **Every bullet has a reference** — `(checkpoint abc123)`, `(commit def456)` — so you or your agent can dig deeper with `entire explain --checkpoint` or `git show`.
-5. **Auto-refreshes** — a SessionStart hook detects stale context (new commits, new checkpoints, format/config changes, or missing `context.md`) and regenerates when your next session begins. Set `session_start: manual` in `.reflect/config.yaml` to get a reminder instead of auto-regeneration.
+Every past session and commit is raw evidence. Reflect extracts the lessons:
+
+1. **Signals, not summaries** — the evidence pipeline cross-references friction, reverts, and learnings across sessions. A revert in session 5 paired with friction in session 3 becomes a pitfall rule. Repeated file churn across sessions surfaces hot areas.
+2. **No recording needed** — [Entire](https://entire.dev) already captures session transcripts. Git already captures commits. Reflect reads both on demand — no extra setup, no intermediate storage.
+3. **Subagent distills** — a Claude subagent reads the evidence and your `format.yaml`, distills cross-session patterns into a briefing with references. Falls back to deterministic rendering without Claude CLI.
+4. **Every lesson is traceable** — `(checkpoint abc123)`, `(commit def456)` — so you or your agent can dig into the original session with `entire explain --checkpoint` or `git show`.
+5. **Learns continuously** — a SessionStart hook detects new sessions and commits, then signals the skill to regenerate context before your next session begins. Set `session_start: manual` in `.reflect/config.yaml` to control this.
 
 ---
 
@@ -110,6 +114,8 @@ The skill triggers automatically when you ask "why" questions. It spawns a **Kee
 /reflect status                  # check evidence sources
 /reflect improve                 # analyze quality, propose changes
 /reflect metrics                 # quantitative health check
+/reflect init                    # first-time setup
+/reflect upgrade                 # update to latest
 ```
 
 ---
@@ -142,7 +148,7 @@ sections:
     entry_fields:
       - mistake         # what the agent did wrong
       - consequence     # what broke or had to be reverted
-      - rule            # the "don't do X because Y" directive
+      - rule            # the "don't do X because Y" directive for future agents
 
 citations: required
 max_lines: 150
@@ -197,16 +203,16 @@ Run it once per repo. It handles:
 ## FAQ
 
 **Does this work without Entire CLI?**
-Yes, but you only get git history (commit messages, not decision traces). Commands like `sessions` and `timeline` require Entire. The real value — corrections, reasoning, abandoned approaches — comes from Entire session transcripts. `reflect init` installs Entire automatically.
+Yes, but you only learn from git history (commit messages, not decision traces). Commands like `sessions` and `timeline` require Entire. The richest lessons — corrections, reasoning, abandoned approaches, friction — come from Entire session transcripts. `reflect init` installs Entire automatically.
 
 **Will it modify my code?**
 No. It writes to `.reflect/`, `.claude/skills/reflect/`, `.claude/agents/` (and `.cursor/agents/` if `.cursor/` exists), and adds an `@.reflect/context.md` reference to `CLAUDE.md` (creating the file if it doesn't exist).
 
 **Does this work across team members?**
-Not yet. Session history is local. Team-scale memory is a future goal.
+Not yet. Session history is local. Team-scale learning is a future goal.
 
 **How is this different from Claude's built-in memory?**
-Claude's memory lives in `~/.claude/projects/` on your laptop — it doesn't travel with the repo, isn't visible to other tools, and can't be customized per project. Reflect's config is committed to git and produces tool-agnostic Markdown.
+Claude's memory lives in `~/.claude/projects/` on your laptop — it doesn't travel with the repo, isn't visible to other tools, and can't be customized per project. Reflect's config is committed to git, its lessons are distilled from real evidence with references, and the output is tool-agnostic Markdown.
 
 **How much does it cost?**
 Default max budget is $0.05 per context generation (Claude Haiku), though typical runs cost less. Free with the deterministic fallback when `claude` CLI is not installed. Override with `REFLECT_MODEL` or `REFLECT_CONTEXT_BUDGET` env vars.

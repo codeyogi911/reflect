@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Repo-owned memory for AI coding agents. Reads raw evidence from Entire CLI sessions and git history on demand. Uses a declarative `format.yaml` to control what sections appear in context, and a Claude subagent to synthesize high-quality briefings with references. Generates context briefings (`context.md`) that any AI tool can read.
+Cross-session learning for AI coding agents. Reads raw evidence from Entire CLI sessions and git history on demand, extracts cross-session signals (friction, reverts, decisions, pitfalls), and distills them into lessons via a Claude subagent and declarative `format.yaml`. Generates context briefings (`context.md`) that any AI tool can read.
 
 ## Structure
 
 - `reflect` — CLI entry point (Python)
-- `lib/` — CLI modules (evidence, context, init, why, search, status, improve)
+- `lib/` — CLI modules (evidence, context, init, search, status, sessions, timeline, improve, metrics)
 - `lib/evidence.py` — fixed evidence gathering pipeline (Entire CLI + git)
 - `skill/SKILL.md` — skill source (dev copy; install copies to `.claude/skills/reflect/`)
 - `SPEC.md` — specification for `.reflect/` directory format
@@ -26,7 +26,7 @@ Repo-owned memory for AI coding agents. Reads raw evidence from Entire CLI sessi
 - Edit `lib/` to change CLI commands
 - Edit `.reflect/format.yaml` (in any repo) to customize context sections
 - Edit `skill/SKILL.md` to change the Claude Code skill (source of truth)
-- Test locally: `python3 reflect context` or `python3 reflect why <topic>`
+- Test locally: `python3 reflect context` or `python3 reflect search <query>`
 - Install CLI via `./install.sh`; the skill is project-local under `.claude/skills/reflect/`
 
 ## Session Insights
