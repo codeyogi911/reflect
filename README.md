@@ -57,37 +57,59 @@ Git history ───────────┘         +                      
 2. **Gathered on demand** — no intermediate storage. The pipeline reads sources and builds evidence at synthesis time.
 3. **Subagent synthesizes** — a Claude subagent reads the evidence and your `format.yaml`, produces a briefing with references. Falls back to deterministic rendering without Claude CLI.
 4. **Every bullet has a reference** — `(checkpoint abc123)`, `(commit def456)` — so you or your agent can dig deeper with `entire explain --checkpoint` or `git show`.
-5. **Auto-refreshes** — a SessionStart hook detects new commits or checkpoints and regenerates context when your next session begins.
+5. **Auto-refreshes** — a SessionStart hook detects stale context (new commits, new checkpoints, format/config changes, or missing `context.md`) and regenerates when your next session begins. Set `session_start: manual` in `.reflect/config.yaml` to get a reminder instead of auto-regeneration.
 
 ---
 
 ## Commands
 
 ```bash
+# Version
+reflect --version                    # print installed version
+
 # Context briefing
 reflect context                      # synthesize and write context.md
+reflect context --max-lines 200      # override line budget
+reflect context --verbose            # show subagent progress on stderr
 
-# Live queries — raw evidence for the agent to reason over
-reflect why src/auth/middleware.ts    # why is this file the way it is?
-reflect why "database migration"     # what happened with this topic?
-reflect search "JWT bug"             # grep across all sources
+# Search across all evidence sources
+reflect search auth                  # words are OR'd by default
+reflect search --phrase login bug    # exact phrase match
+reflect search migration --limit 20  # up to 20 results per source
+reflect search auth --json           # machine-readable output
+
+# Session & timeline exploration (requires Entire)
+reflect sessions                     # list recent Entire sessions
+reflect sessions <session_id>        # inspect one session in detail
+reflect sessions --limit 30 --json   # show more, as JSON
+reflect timeline                     # date-grouped view (last 7 days)
+reflect timeline --days 14 --json    # expand window, JSON output
 
 # Management
 reflect init                         # one-stop setup for any repo
-reflect status                       # show available evidence sources
+reflect init --migrate               # convert legacy harness to format.yaml
+reflect upgrade                      # re-install CLI + update templates, skill, agents
+reflect status                       # evidence sources, context freshness, token stats
+reflect status --json                # machine-readable output
 reflect improve                      # analyze context quality, suggest format.yaml edits
 reflect metrics                      # print JSON metrics (tokens, sessions, signals)
+reflect metrics --export badges/     # write shields.io endpoint files
+reflect metrics --export badges/ --no-json       # export only, suppress stdout JSON
+reflect metrics --generate-summaries             # let Entire generate missing summaries (slow)
 ```
 
 ### As a Claude Code skill
 
-The skill triggers automatically when you ask "why" questions, or invoke directly:
+The skill triggers automatically when you ask "why" questions. It spawns a **Keeper** subagent for deep history investigations. You can also invoke commands directly:
 
 ```
 /reflect                         # regenerate context
-/reflect why auth middleware     # evidence + AI narrative
 /reflect search JWT              # search all sources
+/reflect sessions                # list recent sessions
+/reflect timeline                # date-grouped session view
+/reflect status                  # check evidence sources
 /reflect improve                 # analyze quality, propose changes
+/reflect metrics                 # quantitative health check
 ```
 
 ---
@@ -113,6 +135,15 @@ sections:
     max_bullets: 5
     recency: 7d
 
+  - name: Critical Pitfalls
+    purpose: "agent mistakes, reverted work, and failed approaches — each entry is a DON'T rule backed by evidence of what went wrong"
+    max_bullets: 8
+    recency: 90d
+    entry_fields:
+      - mistake         # what the agent did wrong
+      - consequence     # what broke or had to be reverted
+      - rule            # the "don't do X because Y" directive
+
 citations: required
 max_lines: 150
 ```
@@ -133,7 +164,7 @@ sections:
     recency: 14d
 ```
 
-Use `/reflect improve` to analyze what's working and what's missing in your current config.
+Sections can include `entry_fields` for structured entries (e.g., pitfalls with `mistake`, `consequence`, `rule` fields). Use `/reflect improve` to analyze what's working and what's missing in your current config.
 
 ---
 
@@ -142,10 +173,15 @@ Use `/reflect improve` to analyze what's working and what's missing in your curr
 Run it once per repo. It handles:
 
 - Installing [Entire CLI](https://entire.dev) if not found
-- Enabling Entire for the repo
+- Enabling Entire for the repo (`entire enable --agent claude-code`)
 - Creating `.reflect/` with default `format.yaml` and `config.yaml`
 - Installing the Claude Code skill to `.claude/skills/reflect/`
+- Installing the Keeper agent to `.claude/agents/` (and `.cursor/agents/` if `.cursor/` exists)
 - Wiring `@.reflect/context.md` into `CLAUDE.md`
+
+### Upgrading
+
+`reflect upgrade` re-runs the installer to update the CLI itself, then refreshes the skill, agents, and `format.yaml` template to the latest version. If your `format.yaml` has local edits, the old version is backed up to `format.yaml.bak` before overwriting.
 
 ### What goes in git
 
@@ -161,10 +197,10 @@ Run it once per repo. It handles:
 ## FAQ
 
 **Does this work without Entire CLI?**
-Yes, but you only get git history (commit messages, not decision traces). The real value — corrections, reasoning, abandoned approaches — comes from Entire session transcripts. `reflect init` installs Entire automatically.
+Yes, but you only get git history (commit messages, not decision traces). Commands like `sessions` and `timeline` require Entire. The real value — corrections, reasoning, abandoned approaches — comes from Entire session transcripts. `reflect init` installs Entire automatically.
 
 **Will it modify my code?**
-No. It only writes to `.reflect/` and `.claude/skills/reflect/`, and appends one line to `CLAUDE.md`.
+No. It writes to `.reflect/`, `.claude/skills/reflect/`, `.claude/agents/` (and `.cursor/agents/` if `.cursor/` exists), and adds an `@.reflect/context.md` reference to `CLAUDE.md` (creating the file if it doesn't exist).
 
 **Does this work across team members?**
 Not yet. Session history is local. Team-scale memory is a future goal.
@@ -173,13 +209,13 @@ Not yet. Session history is local. Team-scale memory is a future goal.
 Claude's memory lives in `~/.claude/projects/` on your laptop — it doesn't travel with the repo, isn't visible to other tools, and can't be customized per project. Reflect's config is committed to git and produces tool-agnostic Markdown.
 
 **How much does it cost?**
-~$0.01 per context generation (Claude Haiku). Free with the deterministic fallback. Override with `REFLECT_MODEL` or `REFLECT_CONTEXT_BUDGET` env vars.
+Default max budget is $0.05 per context generation (Claude Haiku), though typical runs cost less. Free with the deterministic fallback when `claude` CLI is not installed. Override with `REFLECT_MODEL` or `REFLECT_CONTEXT_BUDGET` env vars.
 
 ---
 
 ## Contributing
 
-PRs welcome. Clone the repo, edits to `lib/` are live via symlink — no reinstall needed.
+PRs welcome. For development, symlink `reflect` to the repo script (or run `python3 reflect …` directly) so `lib/` edits take effect without reinstalling the release tarball.
 
 ## License
 
