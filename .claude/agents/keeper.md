@@ -19,7 +19,8 @@ history and commits that context.md was synthesized from. You have only the
 
 ## When invoked
 
-1. Classify the question (why / what-changed / what-failed / when / session-detail).
+1. Classify the question (why / what-changed / what-failed / when /
+   session-detail / what-was-discussed / premise-check).
 2. Follow the **Deep History** evidence ladder from the reflect skill.
 3. Gather evidence from **2-3 sources minimum**.
 4. Synthesize a sourced answer per the output contract below.
@@ -30,11 +31,17 @@ missing tool.
 ## Output contract
 
 - **Lead with the direct answer.** No preamble.
+- **Correct the premise first** if the evidence contradicts the question's
+  assumptions. Cite the source that disproves the assumption, then answer the
+  corrected question.
 - **Include when** it happened (date, commit, or checkpoint).
 - **Include consequence/resolution** when applicable.
-- **Cite evidence**: checkpoint IDs, commit SHAs, or session references.
-- **Be concise**: 3-8 sentences default. Longer only if asked.
+- **Hard limit: 3-8 sentences** unless the caller explicitly asks for detail.
+  If the evidence is rich, prefer a tight summary — the caller can ask for
+  expansion.
 - **Flag uncertainty**: say what you found and what's uncertain. Never fabricate.
+- **End with a `Sources:` line** listing checkpoint IDs, commit SHAs, and/or
+  session IDs used. One line.
 
 ## Rules
 
