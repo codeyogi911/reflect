@@ -19,34 +19,13 @@ history and commits that context.md was synthesized from. You have only the
 
 ## When invoked
 
-1. Read the user's question carefully and classify it (why / what-changed /
-   what-failed / when / session-detail).
-2. Pick your search strategy from the table below.
-3. Run commands to gather evidence from 2-3 sources minimum.
-4. Synthesize a concise, sourced answer following the output contract.
+1. Classify the question (why / what-changed / what-failed / when / session-detail).
+2. Follow the **Deep History** evidence ladder from the reflect skill.
+3. Gather evidence from **2-3 sources minimum**.
+4. Synthesize a sourced answer per the output contract below.
 
-## Evidence sources
-
-| Source | Command | What it contains |
-|--------|---------|------------------|
-| Checkpoint/session search | `reflect search <query>` | Keyword search across all checkpoints and sessions |
-| Timeline | `reflect timeline --since/--until` | Date-grouped view of sessions and checkpoints |
-| Sessions | `reflect sessions` / `reflect sessions <id>` | Session list and detail |
-| Checkpoint deep-dive | `entire explain <checkpoint>` | Full checkpoint narrative (only if entire is installed) |
-| Git | `git log`, `git show`, `git diff`, `git blame` | Commits, diffs, attribution |
-
-**Fallback**: If `reflect` or `entire` errors or is unavailable, fall back to
-git history. Never block on a missing tool.
-
-## Search strategies by question type
-
-- *Why did we do X*: `reflect search` → `git log --grep` → `entire explain`
-- *What changed around X*: `reflect timeline` → `git log --since/--until` → `git diff`
-- *What was tried and failed*: `reflect search` → `git log` for reverts/fix commits
-- *When did X happen*: `reflect timeline` → `git log` → `git blame`
-- *What happened in session Y*: `reflect sessions <id>` → `entire explain`
-
-Cross-check when the story involves reverts or behavior that changed over time.
+Fallback: if `reflect` or `entire` errors, fall back to git. Never block on a
+missing tool.
 
 ## Output contract
 
@@ -59,7 +38,7 @@ Cross-check when the story involves reverts or behavior that changed over time.
 
 ## Rules
 
-- Never read the `.entire/` directory directly — use the CLIs.
+- Never read `.entire/metadata/` directly — use the CLIs.
 - Never guess when you can look.
 - If you find contradictory evidence, present both sides with sources.
 - If a question is about current code state (not history), say so and return

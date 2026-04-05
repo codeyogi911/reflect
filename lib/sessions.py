@@ -1,35 +1,11 @@
 """reflect sessions — list and inspect sessions via Entire CLI."""
 
+import json
 import sys
 from datetime import datetime
+
+from .fmt import format_duration, format_tokens, short_id
 from .sources import has_entire, get_entire_sessions, get_session_info
-
-
-def _format_duration(started_at, ended_at):
-    """Compute human-readable duration from ISO timestamps."""
-    try:
-        start = datetime.fromisoformat(started_at)
-        end = datetime.fromisoformat(ended_at)
-        delta = end - start
-        total_secs = int(delta.total_seconds())
-        if total_secs < 60:
-            return f"{total_secs}s"
-        if total_secs < 3600:
-            return f"{total_secs // 60}m"
-        hours = total_secs // 3600
-        mins = (total_secs % 3600) // 60
-        return f"{hours}h {mins}m" if mins else f"{hours}h"
-    except (ValueError, TypeError):
-        return "?"
-
-
-def _format_tokens(total):
-    """Format token count with K/M suffix."""
-    if total >= 1_000_000:
-        return f"{total / 1_000_000:.1f}M"
-    if total >= 1_000:
-        return f"{total / 1_000:.1f}k"
-    return str(total)
 
 
 def _cache_hit_pct(tokens):
@@ -41,57 +17,82 @@ def _cache_hit_pct(tokens):
     return round(cache_read / total * 100)
 
 
-def _show_list(limit):
+def _session_record(s, info):
+    """Build a structured dict for one session (used by both text and JSON)."""
+    tokens = info.get("tokens", {})
+    files = info.get("files_touched", [])
+    duration = "active"
+    if info.get("ended_at"):
+        duration = format_duration(info["started_at"], info["ended_at"])
+
+    try:
+        dt = datetime.fromisoformat(info["started_at"])
+        date_str = dt.strftime("%Y-%m-%d %H:%M")
+    except (ValueError, KeyError):
+        date_str = "?"
+
+    return {
+        "session_id": info["session_id"],
+        "agent": info.get("agent", "?"),
+        "status": info.get("status", "?"),
+        "started_at": info.get("started_at", ""),
+        "ended_at": info.get("ended_at"),
+        "date": date_str,
+        "duration": duration,
+        "turns": info.get("turns", 0),
+        "checkpoints": info.get("checkpoints", 0),
+        "tokens": {
+            "total": tokens.get("total", 0),
+            "input": tokens.get("input", 0),
+            "cache_read": tokens.get("cache_read", 0),
+            "cache_write": tokens.get("cache_write", 0),
+            "output": tokens.get("output", 0),
+            "cache_hit_pct": _cache_hit_pct(tokens),
+        },
+        "files_touched": files,
+        "prompt": s.get("prompt_snippet", ""),
+    }
+
+
+def _show_list(limit, as_json=False):
     """List recent sessions with computed fields."""
     sessions = get_entire_sessions()
     if not sessions:
-        print("No sessions found. Is Entire CLI configured?")
+        if as_json:
+            print("[]")
+        else:
+            print("No sessions found. Is Entire CLI configured?")
         return 1
 
-    shown = 0
-    print(f"## Sessions\n")
+    records = []
     for s in sessions:
-        if shown >= limit:
+        if len(records) >= limit:
             break
         info = get_session_info(s["session_id"], filter_project=True)
         if not info:
             continue
-        shown += 1
+        records.append(_session_record(s, info))
 
-        status = info.get("status", "?")
-        tokens = info.get("tokens", {})
-        total_tok = tokens.get("total", 0)
-        cache_pct = _cache_hit_pct(tokens)
-        files = info.get("files_touched", [])
-        turns = info.get("turns", 0)
+    if as_json:
+        print(json.dumps(records, indent=2, default=str))
+        return 0
 
-        duration = "active"
-        if info.get("ended_at"):
-            duration = _format_duration(info["started_at"], info["ended_at"])
-
-        # Date
-        try:
-            dt = datetime.fromisoformat(info["started_at"])
-            date_str = dt.strftime("%Y-%m-%d %H:%M")
-        except (ValueError, KeyError):
-            date_str = "?"
-
-        prompt = s.get("prompt_snippet", "")[:60]
-        agent = info.get("agent", "?")
-
-        status_icon = "*" if status == "active" else "-"
-        print(f"{status_icon} {date_str}  {agent}  [{status}]  \"{prompt}\"")
-        print(f"  Tokens: {_format_tokens(total_tok)} (cache: {cache_pct}%)  "
-              f"Duration: {duration}  Turns: {turns}  Files: {len(files)}")
+    print("## Sessions\n")
+    for r in records:
+        status_icon = "*" if r["status"] == "active" else "-"
+        sid = short_id(r["session_id"])
+        prompt = r["prompt"][:60]
+        print(f"{status_icon} [{sid}] {r['date']}  {r['agent']}  [{r['status']}]  \"{prompt}\"")
+        print(f"  Tokens: {format_tokens(r['tokens']['total'])} (cache: {r['tokens']['cache_hit_pct']}%)  "
+              f"Duration: {r['duration']}  Turns: {r['turns']}  Files: {len(r['files_touched'])}")
     print()
     return 0
 
 
-def _show_detail(session_id):
+def _show_detail(session_id, as_json=False):
     """Show full detail for a single session."""
     info = get_session_info(session_id)
     if not info:
-        # Try prefix match
         sessions = get_entire_sessions()
         for s in sessions:
             if s["session_id"].startswith(session_id):
@@ -100,6 +101,10 @@ def _show_detail(session_id):
     if not info:
         print(f"Session not found: {session_id}", file=sys.stderr)
         return 1
+
+    if as_json:
+        print(json.dumps(info, indent=2, default=str))
+        return 0
 
     tokens = info.get("tokens", {})
     files = info.get("files_touched", [])
@@ -115,19 +120,18 @@ def _show_detail(session_id):
         pass
 
     if info.get("ended_at"):
-        duration = _format_duration(info["started_at"], info["ended_at"])
+        duration = format_duration(info["started_at"], info["ended_at"])
         print(f"Duration: {duration}")
 
     print(f"Turns: {info.get('turns', 0)}")
     print(f"Checkpoints: {info.get('checkpoints', 0)}")
 
-    # Token breakdown
     total = tokens.get("total", 0)
-    print(f"\nTokens: {_format_tokens(total)} total")
-    print(f"  Input: {_format_tokens(tokens.get('input', 0))}")
-    print(f"  Cache read: {_format_tokens(tokens.get('cache_read', 0))} ({_cache_hit_pct(tokens)}%)")
-    print(f"  Cache write: {_format_tokens(tokens.get('cache_write', 0))}")
-    print(f"  Output: {_format_tokens(tokens.get('output', 0))}")
+    print(f"\nTokens: {format_tokens(total)} total")
+    print(f"  Input: {format_tokens(tokens.get('input', 0))}")
+    print(f"  Cache read: {format_tokens(tokens.get('cache_read', 0))} ({_cache_hit_pct(tokens)}%)")
+    print(f"  Cache write: {format_tokens(tokens.get('cache_write', 0))}")
+    print(f"  Output: {format_tokens(tokens.get('output', 0))}")
 
     if files:
         print(f"\nFiles touched ({len(files)}):")
@@ -150,7 +154,8 @@ def cmd_sessions(args):
 
     session_id = getattr(args, "session_id", None)
     limit = getattr(args, "limit", 15)
+    as_json = getattr(args, "json", False)
 
     if session_id:
-        return _show_detail(session_id)
-    return _show_list(limit)
+        return _show_detail(session_id, as_json=as_json)
+    return _show_list(limit, as_json=as_json)

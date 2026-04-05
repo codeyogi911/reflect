@@ -11,7 +11,8 @@ description: >
   or past AI session transcripts. Even if the user doesn't say "reflect" or
   "history" explicitly, if the answer lives in the past — use this skill.
   Commands: /reflect, /reflect search <query>, /reflect status,
-  /reflect sessions [session_id], /reflect timeline, /reflect improve.
+  /reflect sessions [session_id], /reflect timeline, /reflect improve,
+  /reflect metrics. Admin: /reflect init, /reflect upgrade.
 allowed-tools: Read, Bash, Glob, Grep
 hooks:
   SessionStart:
@@ -20,7 +21,7 @@ hooks:
           command: "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"
 metadata:
   author: shashwatjain
-  version: '5.1'
+  version: '0.5.0'
 ---
 
 # Reflect — Repo-Owned Memory
@@ -39,7 +40,9 @@ Parse $ARGUMENTS to determine which command to run:
 4. `sessions [session_id]` → go to **Command: Sessions**
 5. `timeline` → go to **Command: Timeline**
 6. `improve` → go to **Command: Improve**
-7. Everything else (including no arguments) → go to **Command: Context**
+7. `metrics` → go to **Command: Metrics**
+8. `init` / `upgrade` → go to **Command: Init & Upgrade**
+9. Everything else (including no arguments) → go to **Command: Context**
 
 ---
 
@@ -48,7 +51,9 @@ Parse $ARGUMENTS to determine which command to run:
 Regenerate the context briefing:
 
 ```bash
-reflect context
+reflect context                      # regenerate context briefing
+reflect context --max-lines 200      # override line budget from format.yaml
+reflect context --verbose            # show subagent progress on stderr
 ```
 
 This gathers evidence from Entire CLI + git, passes it through the subagent
@@ -64,13 +69,17 @@ command automatically without user prompting. This keeps the briefing fresh.
 
 ## Command: Search
 
-**Usage**: `/reflect search <query>`
+**Usage**: `/reflect search <query>` or `/reflect search --phrase <multi-word query>`
 
 ```bash
-reflect search <query>
+reflect search <query>              # words are OR'd by default
+reflect search --phrase <query>     # treat full query as one literal phrase
+reflect search <query> --limit 20   # show up to 20 results per source
+reflect search <query> --json       # machine-readable JSON output
 ```
 
-Display the results to the user with source labels.
+Display the results to the user with source labels. Use `--json` when you need
+to parse results programmatically or chain into other tools.
 
 ---
 
@@ -79,7 +88,8 @@ Display the results to the user with source labels.
 **Usage**: `/reflect status`
 
 ```bash
-reflect status
+reflect status                      # show evidence sources and context freshness
+reflect status --json               # machine-readable JSON output
 ```
 
 Display the output. If no evidence sources are found, suggest next steps.
@@ -91,13 +101,19 @@ Display the output. If no evidence sources are found, suggest next steps.
 **Usage**: `/reflect sessions [session_id]`
 
 ```bash
-reflect sessions
-reflect sessions <session_id>
+reflect sessions                    # list recent sessions with IDs (default: 15)
+reflect sessions --limit 30         # show more sessions
+reflect sessions <session_id>       # inspect one session in detail
+reflect sessions --json             # list as JSON (includes full session_id)
+reflect sessions <session_id> --json  # session detail as JSON
 ```
 
+The list view prints a short session ID prefix (e.g. `[b7f5e89a-ba1]`) on each
+line. Use that prefix with `reflect sessions <id>` to drill into detail, or
+with `entire explain --checkpoint <id>` to reach transcript-level depth.
+
 Use this after `reflect search` or `reflect timeline` when you need to move
-from broad evidence into a specific Entire session. Without an ID, list recent
-sessions. With an ID or prefix, inspect one session in detail.
+from broad evidence into a specific Entire session.
 
 ---
 
@@ -106,9 +122,14 @@ sessions. With an ID or prefix, inspect one session in detail.
 **Usage**: `/reflect timeline [--days N]`
 
 ```bash
-reflect timeline
-reflect timeline --days 14
+reflect timeline                    # last 7 days (default)
+reflect timeline --days 14          # expand window
+reflect timeline --json             # machine-readable output
 ```
+
+The human view prints session IDs (e.g. `[b7f5e89a-ba1]`) and checkpoint IDs
+(e.g. `[cp:af09a953]`) so you can chain into `reflect sessions <id>` or
+`entire explain --checkpoint <id>` without switching to JSON.
 
 Use this for time-bounded questions such as "what changed this week" or "what
 happened before the revert". It groups recent sessions and checkpoints by date
@@ -143,6 +164,37 @@ Based on the analysis:
 **This is the core learning loop**: the format controls what gets synthesized,
 the improve command evaluates quality against real evidence, and the user
 tunes sections to match what their project actually needs.
+
+---
+
+## Command: Metrics
+
+**Usage**: `/reflect metrics`
+
+```bash
+reflect metrics                          # print JSON summary to stdout
+reflect metrics --export badges/         # write shields.io endpoint files
+reflect metrics --export badges/ --no-json  # export only, no stdout
+reflect metrics --generate-summaries     # let Entire generate missing summaries (slow)
+```
+
+Outputs quantitative health of the repo's memory: session count, checkpoint
+coverage, context freshness, evidence source availability. Use for dashboards
+or CI badges.
+
+---
+
+## Command: Init & Upgrade
+
+```bash
+reflect init                # scaffold .reflect/ with default format.yaml
+reflect init --migrate      # migrate from legacy harness to format.yaml
+reflect upgrade             # update format.yaml, skill, and agents to latest
+```
+
+`init` is for first-time setup in a new repo. `upgrade` pulls latest templates
+and agent definitions from the installed reflect version without overwriting
+user customizations in `format.yaml`.
 
 ---
 
@@ -189,6 +241,13 @@ Spawn Keeper when:
 - An entry about pitfalls or reverted work is a STOP signal — let Keeper
   verify the constraint before you proceed
 
+Do NOT spawn Keeper when:
+
+- The question is about current code state (read the code instead)
+- context.md already fully answers the question with enough detail
+- The question is forward-looking ("what should we do") not backward-looking
+- You just need a quick git log or diff — run it yourself
+
 ---
 
 ## Rules
@@ -199,3 +258,11 @@ Spawn Keeper when:
 - NEVER include secrets, API keys, or credentials in output
 - **Pitfall/mistake entries are blocking**: if context.md lists a past mistake or revert
   for the area you're about to change, read the linked evidence BEFORE writing code
+- When `reflect` or `entire` errors, fall back to `git log` / `git show` — never
+  block on a missing tool
+- `skill/SKILL.md` is the source of truth; `.claude/skills/reflect/SKILL.md` is a
+  copy installed by `reflect init`. If they diverge, skill/ wins
+- When parsing structured output from subagents, strip markdown code fences before
+  decoding JSON — models wrap JSON in `` ```json `` blocks by default
+- Error paths must include diagnostic content; never return opaque placeholders
+  like `[CLI error: unknown]`

@@ -23,11 +23,14 @@ from lib.sessions import cmd_sessions
 from lib.timeline import cmd_timeline
 from lib.metrics import cmd_metrics
 
+_R = argparse.RawDescriptionHelpFormatter
+
 
 def main():
     parser = argparse.ArgumentParser(
         prog="reflect",
         description="Repo-owned memory for AI coding agents.",
+        formatter_class=_R,
     )
     parser.add_argument(
         "-V",
@@ -38,18 +41,52 @@ def main():
     subparsers = parser.add_subparsers(dest="command")
 
     # reflect init
-    init_parser = subparsers.add_parser("init", help="Initialize .reflect/ with default format")
-    init_parser.add_argument("--migrate", action="store_true", help="Migrate from legacy harness to format.yaml")
+    subparsers.add_parser(
+        "init",
+        help="Initialize .reflect/ with default format",
+        formatter_class=_R,
+        epilog="""\
+Examples:
+  reflect init                # first-time setup (installs Entire, creates .reflect/)
+  reflect init --migrate      # convert legacy harness to format.yaml""",
+    ).add_argument("--migrate", action="store_true", help="Migrate from legacy harness to format.yaml")
 
     # reflect upgrade
-    subparsers.add_parser("upgrade", help="Upgrade format.yaml, skill, and agents to latest")
+    subparsers.add_parser(
+        "upgrade",
+        help="Upgrade format.yaml, skill, and agents to latest",
+        formatter_class=_R,
+        epilog="""\
+Examples:
+  reflect upgrade             # pull latest templates and agent definitions""",
+    )
 
     # reflect context
-    ctx = subparsers.add_parser("context", help="Generate context.md via subagent synthesis")
+    ctx = subparsers.add_parser(
+        "context",
+        help="Generate context.md via subagent synthesis",
+        formatter_class=_R,
+        epilog="""\
+Examples:
+  reflect context                    # regenerate context briefing
+  reflect context --max-lines 200    # override line budget
+  reflect context --verbose          # show subagent progress on stderr""",
+    )
     ctx.add_argument("--max-lines", type=int, default=None, help="Line budget override")
+    ctx.add_argument("--verbose", action="store_true", help="Show subagent progress on stderr")
 
     # reflect search
-    search = subparsers.add_parser("search", help="Grep across all evidence sources")
+    search = subparsers.add_parser(
+        "search",
+        help="Grep across all evidence sources",
+        formatter_class=_R,
+        epilog="""\
+Examples:
+  reflect search auth                     # search for 'auth' across all sources
+  reflect search --phrase login bug       # exact phrase match
+  reflect search migration --limit 20     # show up to 20 results per source
+  reflect search auth --json              # machine-readable JSON output""",
+    )
     search.add_argument(
         "query",
         nargs="+",
@@ -60,27 +97,75 @@ def main():
         action="store_true",
         help="Treat the full query as one literal phrase (no word splitting)",
     )
+    search.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        help="Max results per source (default: 10)",
+    )
+    search.add_argument("--json", action="store_true", help="Output as JSON")
 
     # reflect status
-    subparsers.add_parser("status", help="Show evidence source availability")
+    subparsers.add_parser(
+        "status",
+        help="Show evidence source availability",
+        formatter_class=_R,
+        epilog="""\
+Examples:
+  reflect status               # show evidence sources and context freshness
+  reflect status --json        # machine-readable JSON output""",
+    ).add_argument("--json", action="store_true", help="Output as JSON")
 
     # reflect sessions
-    sess = subparsers.add_parser("sessions", help="List and inspect Entire CLI sessions")
-    sess.add_argument("session_id", nargs="?", default=None, help="Session ID for detail view")
+    sess = subparsers.add_parser(
+        "sessions",
+        help="List and inspect Entire CLI sessions",
+        formatter_class=_R,
+        epilog="""\
+Examples:
+  reflect sessions                         # list recent sessions with IDs
+  reflect sessions --limit 30              # show more sessions
+  reflect sessions <session_id>            # inspect one session in detail
+  reflect sessions <session_id> --json     # session detail as JSON""",
+    )
+    sess.add_argument("session_id", nargs="?", default=None, help="Session ID (or prefix) for detail view")
     sess.add_argument("--limit", type=int, default=15, help="Number of sessions to show (default: 15)")
+    sess.add_argument("--json", action="store_true", help="Output as JSON")
 
     # reflect timeline
-    tl = subparsers.add_parser("timeline", help="Date-grouped view of sessions and checkpoints")
+    tl = subparsers.add_parser(
+        "timeline",
+        help="Date-grouped view of sessions and checkpoints",
+        formatter_class=_R,
+        epilog="""\
+Examples:
+  reflect timeline                  # last 7 days
+  reflect timeline --days 14        # expand window
+  reflect timeline --json           # machine-readable JSON output""",
+    )
     tl.add_argument("--days", type=int, default=7, help="Number of days to show (default: 7)")
     tl.add_argument("--json", action="store_true", help="Output as JSON")
 
     # reflect improve
-    subparsers.add_parser("improve", help="Analyze context quality, suggest format.yaml changes")
+    subparsers.add_parser(
+        "improve",
+        help="Analyze context quality, suggest format.yaml changes",
+        formatter_class=_R,
+        epilog="""\
+Examples:
+  reflect improve              # analyze context quality and evidence gaps""",
+    )
 
     # reflect metrics
     met = subparsers.add_parser(
         "metrics",
         help="Print metrics JSON and/or export shields.io badge endpoint files",
+        formatter_class=_R,
+        epilog="""\
+Examples:
+  reflect metrics                             # print JSON summary to stdout
+  reflect metrics --export badges/            # write shields.io endpoint files
+  reflect metrics --export badges/ --no-json  # export only, no stdout JSON""",
     )
     met.add_argument(
         "--export",
