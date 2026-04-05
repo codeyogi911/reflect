@@ -21,7 +21,7 @@ hooks:
           command: "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"
 metadata:
   author: shashwatjain
-  version: '0.5.0'
+  version: '0.5.1'
 ---
 
 # Reflect — Repo-Owned Memory
@@ -213,9 +213,12 @@ briefing:
    cares about a recent window or the order of events.
 5. Run `reflect sessions` after search or timeline when you need to navigate by
    session, inspect one session, or pick the right ID before going deeper.
-6. Run `entire explain --checkpoint <id>` or `entire explain --commit <sha>`
+6. If one session references or continues from another (e.g., a user complaint
+   in session A leading to a fix in session B), chain across sessions to
+   reconstruct the full narrative before drilling into any single one.
+7. Run `entire explain --checkpoint <id>` or `entire explain --commit <sha>`
    once you already have an ID and need transcript-level depth.
-7. Use `git log` and `git show` as supplements for commit metadata and diffs.
+8. Use `git log` and `git show` as supplements for commit metadata and diffs.
    Git is useful context, but weak on its own for reconstructing agent
    reasoning or backtracking.
 
@@ -258,6 +261,8 @@ Do NOT spawn Keeper when:
 - NEVER include secrets, API keys, or credentials in output
 - **Pitfall/mistake entries are blocking**: if context.md lists a past mistake or revert
   for the area you're about to change, read the linked evidence BEFORE writing code
+- If you find that context.md contradicts the current codebase (e.g., lists something
+  as "open work" that is already implemented), flag the staleness to the user
 - When `reflect` or `entire` errors, fall back to `git log` / `git show` — never
   block on a missing tool
 - `skill/SKILL.md` is the source of truth; `.claude/skills/reflect/SKILL.md` is a
