@@ -448,13 +448,45 @@ def cmd_ingest(args):
     if not categories:
         categories = ["decisions", "friction", "open-work", "pitfalls"]
 
-    # --- Gather evidence ---
-    print("Gathering evidence...", file=sys.stderr)
-    evidence = gather_evidence()
+    # --- Read high-water mark from .last_run ---
+    last_run_file = reflect_dir / ".last_run"
+    since_sha = None
+    since_checkpoint = None
+    is_seed = True  # first ingest ever
+
+    if last_run_file.exists():
+        try:
+            lr = json.loads(last_run_file.read_text())
+            since_sha = lr.get("last_git_sha") or None
+            since_checkpoint = lr.get("last_checkpoint") or None
+            if since_sha or since_checkpoint:
+                is_seed = False
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    # First seed: large window to capture full history
+    # Subsequent: only new evidence since last ingest
+    if is_seed:
+        max_cp, max_commits = 100, 200
+        print("Gathering evidence (initial seed — full history)...", file=sys.stderr)
+    else:
+        max_cp, max_commits = 30, 50
+        print("Gathering evidence (incremental)...", file=sys.stderr)
+
+    evidence = gather_evidence(
+        max_checkpoints=max_cp,
+        max_commits=max_commits,
+        since_sha=since_sha,
+        since_checkpoint=since_checkpoint,
+    )
 
     total_cp = evidence["stats"]["total_checkpoints"]
     total_commits = evidence["stats"]["total_commits"]
     print(f"Found {total_cp} checkpoints, {total_commits} commits", file=sys.stderr)
+
+    if total_cp == 0 and total_commits == 0:
+        print("No new evidence since last ingest.")
+        return 0
 
     evidence_doc = build_evidence_document(evidence)
     evidence_doc = truncate_evidence(evidence_doc)

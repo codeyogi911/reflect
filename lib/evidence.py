@@ -15,8 +15,16 @@ from pathlib import Path
 from lib.sources import run, has_entire, has_git
 
 
-def gather_evidence(max_checkpoints=12, auto_generate=True):
+def gather_evidence(max_checkpoints=12, max_commits=20, auto_generate=True,
+                    since_sha=None, since_checkpoint=None):
     """Gather normalized evidence from Entire CLI + git.
+
+    Args:
+        max_checkpoints: Cap on checkpoints to fetch (default 12).
+        max_commits: Cap on git commits to fetch (default 20).
+        auto_generate: Allow Entire to generate missing summaries.
+        since_sha: Only fetch commits after this SHA (exclusive). None = use max_commits.
+        since_checkpoint: Only fetch checkpoints after this one. None = use max_checkpoints.
 
     Returns dict:
         checkpoints: list of parsed checkpoint dicts (with raw_text)
@@ -40,13 +48,27 @@ def gather_evidence(max_checkpoints=12, auto_generate=True):
     # --- Git evidence ---
     commits = []
     if has_git():
-        raw = run(["git", "log", "-20", "--format=%H", "--no-merges"])
+        if since_sha:
+            # Incremental: only commits since last ingest
+            # Verify since_sha exists in the repo
+            check = run(["git", "cat-file", "-t", since_sha])
+            if check:
+                raw = run(["git", "log", f"{since_sha}..HEAD", f"-{max_commits}", "--format=%H", "--no-merges"])
+            else:
+                # SHA not found (force push, rebase, etc.) — fall back to max_commits
+                raw = run(["git", "log", f"-{max_commits}", "--format=%H", "--no-merges"])
+        else:
+            raw = run(["git", "log", f"-{max_commits}", "--format=%H", "--no-merges"])
         if raw:
             commits = raw.split("\n")
             result["latest_git_sha"] = commits[0][:7]
 
-        # Recent log for context
-        log_raw = run(["git", "log", "--oneline", "-20", "--format=%h %ad %s", "--date=short"])
+        # Recent log for context (matching the same range)
+        if since_sha and run(["git", "cat-file", "-t", since_sha]):
+            log_raw = run(["git", "log", f"{since_sha}..HEAD", f"-{max_commits}",
+                           "--format=%h %ad %s", "--date=short"])
+        else:
+            log_raw = run(["git", "log", f"-{max_commits}", "--format=%h %ad %s", "--date=short"])
         if log_raw:
             for line in log_raw.split("\n"):
                 parts = line.split(" ", 2)
@@ -57,9 +79,15 @@ def gather_evidence(max_checkpoints=12, auto_generate=True):
     # --- Entire CLI evidence ---
     if has_entire() and commits:
         seen_checkpoints = set()
+        found_since = since_checkpoint is None  # if no marker, accept all
         for sha in commits:
             cp = _get_checkpoint_with_raw(sha, generate=auto_generate)
             if cp and cp["checkpoint_id"]:
+                # If we have a high-water mark, skip until we pass it
+                if not found_since:
+                    if cp["checkpoint_id"] == since_checkpoint:
+                        found_since = True
+                    continue
                 if cp["checkpoint_id"] not in seen_checkpoints:
                     seen_checkpoints.add(cp["checkpoint_id"])
                     result["checkpoints"].append(cp)
