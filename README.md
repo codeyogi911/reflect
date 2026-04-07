@@ -72,15 +72,25 @@ Every past session and commit is raw evidence. Reflect extracts the lessons:
 reflect --version                    # print installed version
 
 # Context briefing
-reflect context                      # synthesize and write context.md
+reflect context                      # generate context.md (from wiki if available)
 reflect context --max-lines 200      # override line budget
+reflect context --raw                # bypass wiki, synthesize from raw evidence
 reflect context --verbose            # show subagent progress on stderr
+
+# Wiki — persistent knowledge that compounds across sessions
+reflect init                         # creates .reflect/ with wiki by default
+reflect ingest                       # process new sessions/commits into wiki pages
+reflect ingest --verbose             # show triage + write subagent progress
+reflect lint                         # check wiki health (stale, orphans, duplicates)
+reflect lint --fix                   # auto-fix resolvable issues
+reflect lint --json                  # machine-readable output
 
 # Search across all evidence sources
 reflect search auth                  # words are OR'd by default
 reflect search --phrase login bug    # exact phrase match
 reflect search migration --limit 20  # up to 20 results per source
 reflect search auth --json           # machine-readable output
+reflect search auth --wiki-only      # search only wiki pages (skip Entire + git)
 
 # Session & timeline exploration (requires Entire)
 reflect sessions                     # list recent Entire sessions
@@ -90,7 +100,8 @@ reflect timeline                     # date-grouped view (last 7 days)
 reflect timeline --days 14 --json    # expand window, JSON output
 
 # Management
-reflect init                         # one-stop setup for any repo
+reflect init                         # one-stop setup (includes wiki by default)
+reflect init --no-wiki               # skip wiki layer
 reflect init --migrate               # convert legacy harness to format.yaml
 reflect upgrade                      # re-install CLI + update templates, skill, agents
 reflect status                       # evidence sources, context freshness, token stats
@@ -109,6 +120,8 @@ The skill triggers automatically when you ask "why" questions. It spawns a **Kee
 ```
 /reflect                         # regenerate context
 /reflect search JWT              # search all sources
+/reflect ingest                  # process new evidence into wiki
+/reflect lint                    # check wiki health
 /reflect sessions                # list recent sessions
 /reflect timeline                # date-grouped session view
 /reflect status                  # check evidence sources
@@ -189,12 +202,28 @@ Run it once per repo. It handles:
 
 `reflect upgrade` re-runs the installer to update the CLI itself, then refreshes the skill, agents, and `format.yaml` template to the latest version. If your `format.yaml` has local edits, the old version is backed up to `format.yaml.bak` before overwriting.
 
+### Wiki Layer (optional)
+
+By default, reflect re-derives context from scratch each time. The wiki layer adds persistent, compounding knowledge:
+
+```bash
+reflect init           # creates .reflect/ with wiki by default
+reflect ingest         # process new sessions/commits into wiki pages
+reflect context        # now generates from wiki (cheap, no LLM needed)
+reflect lint           # check wiki health
+```
+
+The wiki is a directory of markdown pages organized by format.yaml sections (e.g., `decisions/`, `pitfalls/`, `open-work/`). Each page has YAML frontmatter with provenance, tags, and cross-references. `reflect ingest` uses a two-step subagent pipeline: first triage (what pages to create/update/resolve), then write. `reflect context` becomes a cheap formatting pass over pre-synthesized pages instead of a full LLM synthesis.
+
+The wiki is committed to git — team members share accumulated knowledge.
+
 ### What goes in git
 
 | File | Git | Purpose |
 |------|-----|---------|
 | `.reflect/format.yaml` | committed | section config — travels with the repo |
 | `.reflect/config.yaml` | committed | operational settings |
+| `.reflect/wiki/` | committed | persistent knowledge pages (if wiki enabled) |
 | `.reflect/context.md` | gitignored | generated briefing — machine-local |
 | `.reflect/.last_run` | gitignored | freshness state |
 
@@ -209,7 +238,7 @@ Yes, but you only learn from git history (commit messages, not decision traces).
 No. It writes to `.reflect/`, `.claude/skills/reflect/`, `.claude/agents/`, and adds an `@.reflect/context.md` reference to `CLAUDE.md` (creating the file if it doesn't exist).
 
 **Does this work across team members?**
-Not yet. Session history is local. Team-scale learning is a future goal.
+Partially. Raw session history (Entire CLI) is local, but the wiki layer (created by default on `reflect init`) is committed to git — team members share accumulated knowledge pages. Full team-scale learning (shared sessions, collaborative review) is a future goal.
 
 **How is this different from Claude's built-in memory?**
 Claude's memory lives in `~/.claude/projects/` on your laptop — it doesn't travel with the repo, isn't visible to other tools, and can't be customized per project. Reflect's config is committed to git, its lessons are distilled from real evidence with references, and the output is tool-agnostic Markdown.

@@ -68,11 +68,26 @@ else
 fi
 
 if [ "$NEEDS_UPDATE" = true ]; then
+  # Check if wiki exists — if so, ingest first, then regenerate context
+  HAS_WIKI=false
+  if [ -d ".reflect/wiki" ]; then
+    HAS_WIKI=true
+  fi
+
   if [ "$MODE" = "auto" ]; then
-    echo "Reflect: Evidence has changed. Regenerating context."
+    if [ "$HAS_WIKI" = true ]; then
+      echo "Reflect: Evidence has changed. Ingesting into wiki and regenerating context."
+      echo "REFLECT_WIKI_INGEST"
+    else
+      echo "Reflect: Evidence has changed. Regenerating context."
+    fi
     echo "REFLECT_AUTO_RUN"
   else
-    echo "Reflect: Evidence has changed since last context generation. Run /reflect to update."
+    if [ "$HAS_WIKI" = true ]; then
+      echo "Reflect: Evidence has changed since last ingest. Run /reflect ingest then /reflect to update."
+    else
+      echo "Reflect: Evidence has changed since last context generation. Run /reflect to update."
+    fi
   fi
 fi
 

@@ -1,6 +1,6 @@
 # `.reflect/` Specification
 
-**Version**: 3.0.0
+**Version**: 4.0.0
 
 This document specifies the `.reflect/` directory format — a minimal,
 repo-owned interface for AI coding agent memory.
@@ -29,7 +29,13 @@ repo-owned interface for AI coding agent memory.
 ├── format.yaml         # Declarative section config (REQUIRED)
 ├── context.md          # Generated briefing for agent consumption (GENERATED)
 ├── config.yaml         # Optional operational configuration
-└── .last_run           # Freshness state (GENERATED, gitignored)
+├── .last_run           # Freshness state (GENERATED, gitignored)
+└── wiki/               # Persistent knowledge base (OPTIONAL, committed)
+    ├── decisions/      # Maps to "Key Decisions & Rationale" section
+    ├── gotchas/        # Maps to "Gotchas & Friction" section
+    ├── open-work/      # Maps to "Open Work" section
+    ├── pitfalls/       # Maps to "Critical Pitfalls" section
+    └── log.md          # Chronological ingest log
 ```
 
 ---
@@ -69,14 +75,14 @@ sections:
     max_bullets: 5
     recency: 7d
 
-  - name: Abandoned Approaches
-    purpose: high-cost dead ends an agent would plausibly retry
-    max_bullets: 5
+  - name: Critical Pitfalls
+    purpose: "agent mistakes, reverted work, and failed approaches — each entry is a DON'T rule"
+    max_bullets: 8
     recency: 90d
     entry_fields:
-      - approach        # what was tried
-      - reason          # why it was abandoned
-      - revisit_when    # condition for reconsidering, or "never"
+      - mistake         # what the agent did wrong
+      - consequence     # what broke or had to be reverted
+      - rule            # the "don't do X because Y" directive
 
 citations: required
 max_lines: 150
@@ -113,14 +119,14 @@ Git history          ──►  format.yaml       ──►   (or deterministic
 ## 5. Two Read Paths
 
 ### Passive (pre-session briefing)
-`reflect context` runs the pipeline and writes `context.md`. This is the
-pre-computed briefing that gets wired into instruction files (CLAUDE.md,
-.cursorrules, etc.).
+`reflect context` writes `context.md`. When a wiki exists, this is a cheap
+formatting pass over pre-synthesized wiki pages. Without a wiki, it runs the
+full evidence → subagent pipeline. Use `--raw` to force raw synthesis.
 
 ### Active (live query)
-`reflect why <topic>` and `reflect search <query>` bypass the pipeline.
-They fetch raw evidence from Entire + git and dump it to stdout. The agent
-reasons over raw evidence — no line budget, no filtering.
+`reflect search <query>` searches wiki pages first (when available), then
+Entire CLI checkpoints and git history. Use `--wiki-only` to search only
+pre-synthesized wiki knowledge. Results include source labels and citations.
 
 ---
 
@@ -149,18 +155,78 @@ auto_generate: true       # Allow Entire to generate missing AI summaries
 ```
 
 The session-start hook compares this against current state to decide whether
-to regenerate context.md.
+to regenerate context.md. When a wiki exists, the hook signals `REFLECT_WIKI_INGEST`
+to run `reflect ingest` before `reflect context`, ensuring wiki pages are updated
+from new evidence before the briefing is regenerated.
 
 ---
 
-## 8. Git Conventions
+## 8. Wiki Layer (Optional)
 
-**Commit**: `.reflect/format.yaml`, `.reflect/config.yaml`
+The wiki layer adds persistent, compounding knowledge between raw evidence
+and the bounded briefing. Enabled by default on `reflect init` (skip with `--no-wiki`).
+
+### Page Format
+
+Each wiki page is a markdown file with YAML frontmatter:
+
+```markdown
+---
+created: 2026-04-07
+updated: 2026-04-07
+sources:
+  - checkpoint: abc123def456
+  - commit: def789
+tags: [architecture, format-yaml]
+status: active
+related:
+  - decisions/zero-storage-architecture.md
+---
+
+# Page Title
+
+Body text (200-500 words, synthesized knowledge with inline citations).
+```
+
+Frontmatter fields:
+- **created/updated**: ISO dates for freshness tracking
+- **sources**: provenance — checkpoint IDs or commit SHAs cited
+- **tags**: 1-4 topic tags for filtering and search
+- **status**: `active` (appears in briefings), `superseded`, or `resolved`
+- **related**: cross-references to other wiki pages
+
+### Operations
+
+- **Ingest** (`reflect ingest`): Two-step subagent pipeline. Step 1 (triage):
+  given new evidence + page index, produce a JSON plan of creates/updates/resolves.
+  Step 2 (write): produce page content for each planned action.
+- **Briefing** (`reflect context`): When wiki exists, generates context.md from
+  wiki pages (cheap formatting pass, no LLM). Falls back to raw synthesis with `--raw`.
+- **Search** (`reflect search`): Searches wiki pages first (text matching or qmd
+  hybrid search), then Entire + git. `--wiki-only` skips raw sources.
+- **Lint** (`reflect lint`): Health checks — stale pages, orphans, near-duplicates,
+  coverage gaps, possibly-resolved open-work. `--fix` auto-resolves and archives.
+
+### Directory Mapping
+
+Each `format.yaml` section maps to a wiki subdirectory via slugification:
+- "Key Decisions & Rationale" → `decisions/`
+- "Gotchas & Friction" → `gotchas/`
+- "Open Work" → `open-work/`
+- "Critical Pitfalls" → `pitfalls/`
+
+No separate index file — the index is built at runtime by scanning frontmatter.
+
+---
+
+## 9. Git Conventions
+
+**Commit**: `.reflect/format.yaml`, `.reflect/config.yaml`, `.reflect/wiki/`
 **Gitignore**: `.reflect/context.md`, `.reflect/.last_run`
 
 ---
 
-## 9. Legacy Harness Escape Hatch
+## 10. Legacy Harness Escape Hatch
 
 If `.reflect/harness` exists, `reflect context` runs it as a subprocess
 instead of the format.yaml pipeline. This preserves backward compatibility
@@ -168,7 +234,7 @@ for repos with custom harness scripts. Migrate with `reflect init --migrate`.
 
 ---
 
-## 10. Security
+## 11. Security
 
 - Never store credentials, API keys, or secrets in context output.
 - Evidence from session transcripts is treated as untrusted data in the
@@ -177,6 +243,16 @@ for repos with custom harness scripts. Migrate with `reflect init --migrate`.
 ---
 
 ## Changelog
+
+### 4.0.0 (2026-04-07)
+- Architecture: added optional wiki layer (`.reflect/wiki/`) for persistent, compounding knowledge.
+- Added: `reflect ingest` — two-step subagent pipeline (triage + write) for incremental wiki updates.
+- Added: `reflect lint` — wiki health checks (stale, orphan, duplicate, coverage, resolved).
+- Changed: `reflect context` now generates from wiki when available (cheap formatting, no LLM).
+- Added: `--wiki` flag for `reflect init`, `--raw` for `reflect context`, `--wiki-only` for `reflect search`.
+- Added: `lib/wiki.py` (foundation), `lib/ingest.py` (ingest), `lib/lint.py` (lint).
+- Added: qmd integration for hybrid search (optional dependency).
+- Wiki pages are committed to git; knowledge survives across sessions and team members.
 
 ### 3.0.0 (2026-04-04)
 - Architecture: replaced executable harness with declarative `format.yaml`.

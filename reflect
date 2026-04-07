@@ -22,6 +22,8 @@ from lib.improve import cmd_improve
 from lib.sessions import cmd_sessions
 from lib.timeline import cmd_timeline
 from lib.metrics import cmd_metrics
+from lib.ingest import cmd_ingest
+from lib.lint import cmd_lint
 
 _R = argparse.RawDescriptionHelpFormatter
 
@@ -41,15 +43,18 @@ def main():
     subparsers = parser.add_subparsers(dest="command")
 
     # reflect init
-    subparsers.add_parser(
+    init_parser = subparsers.add_parser(
         "init",
         help="Initialize .reflect/ with default format",
         formatter_class=_R,
         epilog="""\
 Examples:
-  reflect init                # first-time setup (installs Entire, creates .reflect/)
-  reflect init --migrate      # convert legacy harness to format.yaml""",
-    ).add_argument("--migrate", action="store_true", help="Migrate from legacy harness to format.yaml")
+  reflect init                # first-time setup (creates .reflect/ with wiki)
+  reflect init --migrate      # convert legacy harness to format.yaml
+  reflect init --no-wiki      # skip wiki layer initialization""",
+    )
+    init_parser.add_argument("--migrate", action="store_true", help="Migrate from legacy harness to format.yaml")
+    init_parser.add_argument("--no-wiki", action="store_true", help="Skip wiki layer initialization")
 
     # reflect upgrade
     subparsers.add_parser(
@@ -74,6 +79,7 @@ Examples:
     )
     ctx.add_argument("--max-lines", type=int, default=None, help="Line budget override")
     ctx.add_argument("--verbose", action="store_true", help="Show subagent progress on stderr")
+    ctx.add_argument("--raw", action="store_true", help="Bypass wiki, synthesize from raw evidence")
 
     # reflect search
     search = subparsers.add_parser(
@@ -104,6 +110,12 @@ Examples:
         help="Max results per source (default: 10)",
     )
     search.add_argument("--json", action="store_true", help="Output as JSON")
+    search.add_argument(
+        "--wiki-only",
+        action="store_true",
+        dest="wiki_only",
+        help="Only search wiki (skip Entire + git)",
+    )
 
     # reflect status
     subparsers.add_parser(
@@ -145,6 +157,32 @@ Examples:
     )
     tl.add_argument("--days", type=int, default=7, help="Number of days to show (default: 7)")
     tl.add_argument("--json", action="store_true", help="Output as JSON")
+
+    # reflect ingest
+    ingest = subparsers.add_parser(
+        "ingest",
+        help="Ingest new evidence into the wiki",
+        formatter_class=_R,
+        epilog="""\
+Examples:
+  reflect ingest              # process new sessions/commits into wiki pages
+  reflect ingest --verbose    # show subagent progress""",
+    )
+    ingest.add_argument("--verbose", action="store_true", help="Show subagent progress on stderr")
+
+    # reflect lint
+    lint = subparsers.add_parser(
+        "lint",
+        help="Check wiki health and report issues",
+        formatter_class=_R,
+        epilog="""\
+Examples:
+  reflect lint              # report wiki health issues
+  reflect lint --fix        # auto-fix resolvable issues
+  reflect lint --json       # machine-readable output""",
+    )
+    lint.add_argument("--fix", action="store_true", help="Auto-fix resolvable issues (mark resolved, archive)")
+    lint.add_argument("--json", action="store_true", help="Output as JSON")
 
     # reflect improve
     subparsers.add_parser(
@@ -195,6 +233,8 @@ Examples:
         "init": cmd_init,
         "upgrade": cmd_upgrade,
         "context": cmd_context,
+        "ingest": cmd_ingest,
+        "lint": cmd_lint,
         "search": cmd_search,
         "status": cmd_status,
         "sessions": cmd_sessions,

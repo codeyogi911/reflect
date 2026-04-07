@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -24,6 +25,8 @@ def _collect_status():
         "context": None,
         "last_run": None,
         "token_usage": None,
+        "wiki": None,
+        "qmd": None,
     }
 
     if has_entire():
@@ -80,6 +83,15 @@ def _collect_status():
         stats = token_window_stats(days=7, max_sessions=30, filter_project=True)
         if stats:
             data["token_usage"] = stats
+
+    wiki_dir = reflect_dir / "wiki"
+    if wiki_dir.exists() and wiki_dir.is_dir():
+        page_count = len([f for f in wiki_dir.rglob("*.md") if f.name != "log.md"])
+        data["wiki"] = {"exists": True, "pages": page_count, "path": str(wiki_dir)}
+    else:
+        data["wiki"] = {"exists": False}
+
+    data["qmd"] = {"available": shutil.which("qmd") is not None}
 
     return data, None
 
@@ -141,6 +153,19 @@ def cmd_status(args):
     stats = data.get("token_usage")
     if stats:
         _show_token_analytics(stats)
+
+    print()
+    wiki = data.get("wiki")
+    if wiki and wiki["exists"]:
+        print(f"**Wiki**: {wiki['pages']} page(s) at {wiki['path']}")
+    else:
+        print("**Wiki**: not initialized (run `reflect init` to enable)")
+
+    qmd = data.get("qmd")
+    if qmd and qmd["available"]:
+        print("**qmd**: installed")
+    else:
+        print("**qmd**: not installed")
 
     return 0
 

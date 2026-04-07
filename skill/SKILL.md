@@ -10,9 +10,10 @@ description: >
   repo"), and any question that is best answered by consulting git history
   or past AI session transcripts. Even if the user doesn't say "reflect" or
   "history" explicitly, if the answer lives in the past — use this skill.
-  Commands: /reflect, /reflect search <query>, /reflect status,
-  /reflect sessions [session_id], /reflect timeline, /reflect improve,
-  /reflect metrics. Admin: /reflect init, /reflect upgrade.
+  Commands: /reflect, /reflect search <query>, /reflect ingest,
+  /reflect lint, /reflect status, /reflect sessions [session_id],
+  /reflect timeline, /reflect improve, /reflect metrics.
+  Admin: /reflect init, /reflect upgrade.
 allowed-tools: Read, Bash, Glob, Grep
 hooks:
   SessionStart:
@@ -21,7 +22,7 @@ hooks:
           command: "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"
 metadata:
   author: shashwatjain
-  version: '0.5.2'
+  version: '0.6.0'
 ---
 
 # Reflect — Repo-Owned Memory
@@ -35,14 +36,16 @@ briefings with references. Live queries dump raw evidence for you to reason over
 Parse $ARGUMENTS to determine which command to run:
 
 1. `search <query>` → go to **Command: Search**
-2. `status` → go to **Command: Status**
-3. `context` → go to **Command: Context**
-4. `sessions [session_id]` → go to **Command: Sessions**
-5. `timeline` → go to **Command: Timeline**
-6. `improve` → go to **Command: Improve**
-7. `metrics` → go to **Command: Metrics**
-8. `init` / `upgrade` → go to **Command: Init & Upgrade**
-9. Everything else (including no arguments) → go to **Command: Context**
+2. `ingest` → go to **Command: Ingest**
+3. `lint` → go to **Command: Lint**
+4. `status` → go to **Command: Status**
+5. `context` → go to **Command: Context**
+6. `sessions [session_id]` → go to **Command: Sessions**
+7. `timeline` → go to **Command: Timeline**
+8. `improve` → go to **Command: Improve**
+9. `metrics` → go to **Command: Metrics**
+10. `init` / `upgrade` → go to **Command: Init & Upgrade**
+11. Everything else (including no arguments) → go to **Command: Context**
 
 ---
 
@@ -51,19 +54,24 @@ Parse $ARGUMENTS to determine which command to run:
 Regenerate the context briefing:
 
 ```bash
-reflect context                      # regenerate context briefing
+reflect context                      # generate context.md (from wiki if available)
 reflect context --max-lines 200      # override line budget from format.yaml
+reflect context --raw                # bypass wiki, synthesize from raw evidence
 reflect context --verbose            # show subagent progress on stderr
 ```
 
-This gathers evidence from Entire CLI + git, passes it through the subagent
-with the format config, validates output (citations, line budget), and writes
-`context.md`. Falls back to deterministic rendering if Claude CLI is unavailable.
+When a wiki exists (`.reflect/wiki/`), context.md is generated from wiki pages —
+a cheap formatting pass with no LLM call. Use `--raw` to force raw evidence synthesis.
+Without a wiki, this gathers evidence from Entire CLI + git, passes it through the
+subagent with the format config, validates output, and writes `context.md`.
 
 Report the result to the user: "Context briefing updated."
 
-If the **SessionStart hook** output contains `REFLECT_AUTO_RUN`, run this
-command automatically without user prompting. This keeps the briefing fresh.
+If the **SessionStart hook** output contains `REFLECT_WIKI_INGEST`, run
+`reflect ingest` first to update wiki pages from new evidence, then run
+`reflect context` to regenerate the briefing. If the output only contains
+`REFLECT_AUTO_RUN` (no wiki), run `reflect context` directly. Both signals
+trigger automatically without user prompting. This keeps the briefing fresh.
 
 ---
 
@@ -76,10 +84,53 @@ reflect search <query>              # words are OR'd by default
 reflect search --phrase <query>     # treat full query as one literal phrase
 reflect search <query> --limit 20   # show up to 20 results per source
 reflect search <query> --json       # machine-readable JSON output
+reflect search <query> --wiki-only  # search only wiki pages (skip Entire + git)
 ```
 
-Display the results to the user with source labels. Use `--json` when you need
-to parse results programmatically or chain into other tools.
+When a wiki exists, wiki pages are searched first (text matching, or qmd hybrid
+search if installed), then Entire + git. Display the results to the user with
+source labels. Use `--json` when you need to parse results programmatically.
+
+---
+
+## Command: Ingest
+
+**Usage**: `/reflect ingest`
+
+```bash
+reflect ingest                      # process new sessions/commits into wiki pages
+reflect ingest --verbose            # show triage + write subagent progress
+```
+
+Ingests new evidence into the wiki via a two-step subagent pipeline:
+1. **Triage**: Given new evidence + existing page index, produces a JSON plan
+   (create new pages, update existing ones, resolve completed open-work).
+2. **Write**: For each planned action, produces page content with frontmatter.
+
+Requires wiki to be initialized (`reflect init`) and Claude CLI.
+Report the result: how many pages were created, updated, or resolved.
+
+---
+
+## Command: Lint
+
+**Usage**: `/reflect lint`
+
+```bash
+reflect lint                        # report wiki health issues
+reflect lint --fix                  # auto-fix resolvable issues
+reflect lint --json                 # machine-readable output
+```
+
+Checks wiki health:
+- **Stale pages**: updated date older than category recency window
+- **Orphan pages**: no inbound related links from other pages
+- **Possibly resolved**: open-work pages whose keywords appear in recent git log
+- **Coverage gaps**: format.yaml sections with few or no wiki pages
+- **Near-duplicates**: pages in the same category with >70% title overlap
+
+`--fix` auto-resolves open-work and archives superseded pages. Returns non-zero
+exit code when issues are found (useful for CI).
 
 ---
 
@@ -187,7 +238,8 @@ or CI badges.
 ## Command: Init & Upgrade
 
 ```bash
-reflect init                # scaffold .reflect/ with default format.yaml
+reflect init                # scaffold .reflect/ with wiki (default)
+reflect init --no-wiki      # skip wiki layer
 reflect init --migrate      # migrate from legacy harness to format.yaml
 reflect upgrade             # update format.yaml, skill, and agents to latest
 ```
@@ -205,20 +257,22 @@ briefing:
 
 1. Start with `.reflect/context.md` as the briefing. It is the fastest way to
    get the current narrative and references.
-2. Run `reflect status` if you are not sure whether Entire-backed evidence is
+2. Run `reflect search <query> --wiki-only` for pre-synthesized answers from
+   wiki pages when you need deeper knowledge than the briefing provides.
+3. Run `reflect status` if you are not sure whether Entire-backed evidence is
    available in this repo.
-3. Run `reflect search <query>` for breadth across aggregated evidence when
+4. Run `reflect search <query>` for breadth across all evidence sources when
    you are still locating the right topic, checkpoint, or session.
-4. Run `reflect timeline` for time-bounded questions, especially when the user
+5. Run `reflect timeline` for time-bounded questions, especially when the user
    cares about a recent window or the order of events.
-5. Run `reflect sessions` after search or timeline when you need to navigate by
+6. Run `reflect sessions` after search or timeline when you need to navigate by
    session, inspect one session, or pick the right ID before going deeper.
-6. If one session references or continues from another (e.g., a user complaint
+7. If one session references or continues from another (e.g., a user complaint
    in session A leading to a fix in session B), chain across sessions to
    reconstruct the full narrative before drilling into any single one.
-7. Run `entire explain --checkpoint <id>` or `entire explain --commit <sha>`
+8. Run `entire explain --checkpoint <id>` or `entire explain --commit <sha>`
    once you already have an ID and need transcript-level depth.
-8. Use `git log` and `git show` as supplements for commit metadata and diffs.
+9. Use `git log` and `git show` as supplements for commit metadata and diffs.
    Git is useful context, but weak on its own for reconstructing agent
    reasoning or backtracking.
 

@@ -111,6 +111,33 @@ def cmd_init(args):
         if not config.exists():
             shutil.copy2(_template_path("config.yaml"), config)
 
+    # --- Step 2b: Wiki (always, unless --no-wiki) ---
+    no_wiki = hasattr(args, 'no_wiki') and args.no_wiki
+    wiki = not no_wiki
+    if wiki:
+        from lib.wiki import init_wiki
+        fmt = None
+        format_file = reflect_dir / "format.yaml"
+        if format_file.exists():
+            from lib.context import load_format
+            fmt = load_format(reflect_dir)
+        else:
+            from lib.context import DEFAULT_FORMAT
+            fmt = DEFAULT_FORMAT
+        wiki_dir = init_wiki(reflect_dir, fmt["sections"])
+        print(f"Wiki initialized: {wiki_dir}/")
+
+    # --- Step 2c: qmd collection (if qmd available and wiki initialized) ---
+    if wiki and shutil.which("qmd"):
+        wiki_path = str(wiki_dir.resolve())
+        ok, _ = _run(["qmd", "collection", "add", wiki_path, "--name", "reflect-wiki"])
+        if ok:
+            _run(["qmd", "context", "add", "qmd://reflect-wiki", "Project memory: decisions, pitfalls, patterns, open work"])
+            print("qmd collection registered: reflect-wiki")
+        else:
+            # Collection may already exist — not an error
+            print("qmd: collection reflect-wiki already registered (or qmd error)")
+
     # --- Step 3: Install skill + hooks ---
     _install_skill()
 
