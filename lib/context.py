@@ -234,7 +234,9 @@ def _synthesize_context(evidence_doc, fmt, verbose=False):
         "--max-turns", "1",
         "--tools", "",
         "--max-budget-usd", MAX_BUDGET,
-        "--append-system-prompt", system_prompt,
+        "--setting-sources", "",
+        "--no-session-persistence",
+        "--system-prompt", system_prompt,
     ]
 
     if verbose:

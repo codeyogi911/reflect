@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -81,7 +82,9 @@ def _call_subagent(prompt, system_prompt, verbose=False, step_name=""):
         "--max-turns", "1",
         "--tools", "",
         "--max-budget-usd", INGEST_BUDGET,
-        "--append-system-prompt", system_prompt,
+        "--setting-sources", "",
+        "--no-session-persistence",
+        "--system-prompt", system_prompt,
     ]
 
     label = f"[ingest/{step_name}]" if step_name else "[ingest]"
@@ -296,45 +299,58 @@ def _write_page_content(evidence_doc, action_type, page_info, existing_content, 
 
 
 def _batch_write(evidence_doc, actions, action_type, wiki_dir, today, verbose=False):
-    """Write pages in batches of up to 5.
+    """Write pages concurrently using a thread pool.
 
     Returns list of (item, raw_content, effective_action_type) tuples.
     Each action is a dict from the triage plan.
     """
-    BATCH_SIZE = 5
+    MAX_WORKERS = 5
     results = []
 
-    for i in range(0, len(actions), BATCH_SIZE):
-        batch = actions[i:i + BATCH_SIZE]
-        for item in batch:
-            action_type_eff = action_type
-            existing = None
+    def _write_one(item):
+        action_type_eff = action_type
+        existing = None
 
-            if action_type in ("update", "resolve"):
-                page_path = wiki_dir / item["path"]
-                if page_path.exists():
-                    existing = page_path.read_text()
-                else:
-                    if verbose:
-                        print(
-                            f"  [ingest/write] page not found: {item['path']}, treating as create",
-                            file=sys.stderr,
-                        )
-                    action_type_eff = "create"
-                    # Fill in category/title from path for create fallback
-                    parts = item["path"].split("/")
-                    item = dict(item)
-                    if "category" not in item:
-                        item["category"] = parts[0] if parts else "general"
-                    if "title" not in item:
-                        item["title"] = parts[-1].replace(".md", "").replace("-", " ").title()
-                    if "slug" not in item:
-                        item["slug"] = parts[-1].replace(".md", "") if parts else "page"
+        if action_type in ("update", "resolve"):
+            page_path = wiki_dir / item["path"]
+            if page_path.exists():
+                existing = page_path.read_text()
+            else:
+                if verbose:
+                    print(
+                        f"  [ingest/write] page not found: {item['path']}, treating as create",
+                        file=sys.stderr,
+                    )
+                action_type_eff = "create"
+                # Fill in category/title from path for create fallback
+                parts = item["path"].split("/")
+                item_copy = dict(item)
+                if "category" not in item_copy:
+                    item_copy["category"] = parts[0] if parts else "general"
+                if "title" not in item_copy:
+                    item_copy["title"] = parts[-1].replace(".md", "").replace("-", " ").title()
+                if "slug" not in item_copy:
+                    item_copy["slug"] = parts[-1].replace(".md", "") if parts else "page"
+                return item_copy, action_type_eff, existing
 
-            raw = _write_page_content(
-                evidence_doc, action_type_eff,
-                item, existing, today, verbose=verbose,
-            )
+        return item, action_type_eff, existing
+
+    # Prepare items (read existing content) — fast, sequential
+    prepared = [_write_one(item) for item in actions]
+
+    # Call subagent for each page concurrently
+    def _call_one(prep):
+        item, action_type_eff, existing = prep
+        raw = _write_page_content(
+            evidence_doc, action_type_eff,
+            item, existing, today, verbose=verbose,
+        )
+        return item, raw, action_type_eff
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+        futures = {pool.submit(_call_one, p): p for p in prepared}
+        for future in as_completed(futures):
+            item, raw, action_type_eff = future.result()
             if raw:
                 results.append((item, raw, action_type_eff))
             else:
