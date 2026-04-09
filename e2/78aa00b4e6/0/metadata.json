@@ -1,0 +1,47 @@
+{
+  "cli_version": "0.5.3",
+  "checkpoint_id": "e278aa00b4e6",
+  "session_id": "417fb274-9472-42c9-8200-8b7b283d82e2",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-09T13:46:01.308070495Z",
+  "branch": "claude/test-reflect-performance-BDpt3",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".claude/skills/reflect/SKILL.md",
+    ".reflect/.last_run",
+    ".reflect/context.md",
+    ".reflect/wiki/decisions/critical-pitfalls-detection.md",
+    ".reflect/wiki/decisions/high-water-mark-incremental-ingest.md",
+    ".reflect/wiki/decisions/keeper-agent-focused-design.md",
+    ".reflect/wiki/decisions/wiki-layer-persistent-knowledge.md",
+    ".reflect/wiki/decisions/zero-storage-architecture.md",
+    ".reflect/wiki/gotchas/repo-specific-collection-names.md",
+    ".reflect/wiki/gotchas/symlink-hooks-directory.md"
+  ],
+  "agent": "Claude Code",
+  "turn_id": "5b24f8a306f1",
+  "checkpoint_transcript_start": 177,
+  "transcript_lines_at_start": 177,
+  "token_usage": {
+    "input_tokens": 7,
+    "cache_creation_tokens": 2314,
+    "cache_read_tokens": 365697,
+    "output_tokens": 1200,
+    "api_call_count": 6
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-09T13:46:00.983388067Z",
+    "agent_lines": 267,
+    "agent_removed": 30,
+    "human_added": 9,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 276,
+    "total_lines_changed": 306,
+    "agent_percentage": 97.05882352941177,
+    "metric_version": 2
+  }
+}
