@@ -22,7 +22,7 @@ hooks:
           command: "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"
 metadata:
   author: shashwatjain
-  version: '0.5.2'
+  version: '0.6.0'
 ---
 
 # Reflect — Repo-Owned Memory
