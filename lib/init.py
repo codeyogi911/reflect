@@ -181,6 +181,17 @@ def cmd_init(args):
         else:
             print(f"qmd: collection {collection_name} already registered")
 
+        # Seed embeddings if pages already exist (e.g., re-init on existing wiki)
+        has_pages = any(
+            f.is_file() and f.suffix == ".md" and f.name not in ("index.md", "log.md")
+            for d in wiki_dir.iterdir() if d.is_dir() and not d.name.startswith("_")
+            for f in d.iterdir()
+        )
+        if has_pages:
+            print("Seeding qmd embeddings for existing wiki pages...")
+            _run(["qmd", "update", "-c", collection_name], timeout=60)
+            _run(["qmd", "embed", "-c", collection_name], timeout=300)
+
     # --- Step 3: Install skill + hooks ---
     _install_skill()
 
