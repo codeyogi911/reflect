@@ -27,6 +27,50 @@
   "session_metrics": {
     "turn_count": 4
   },
+  "summary": {
+    "intent": "Retrofit the reflect project to use qmd's agentic-specific CLI flags (--json, --files, --min-score, --full) so AI agents can consume structured output instead of plain text.",
+    "outcome": "Successfully integrated qmd's agentic interface across four files and pushed commit 9d724e8; also discovered and fixed a latent bug where search.py used --limit instead of qmd's correct -n flag.",
+    "learnings": {
+      "repo": [
+        "qmd ships its own Claude skill and MCP server; `qmd skill install --yes` creates a symlink at .claude/skills/qmd/ and should be called during `reflect init`",
+        "The keeper agent's evidence ladder should use qmd as the first rung (fastest) before descending to full session search or git history",
+        "qmd supports five query types: query, search, vsearch, get, multi-get, each with distinct agentic flags",
+        "qmd supports advanced query grammar prefixes: lex:, vec:, hyde:, intent: for when the hybrid default is insufficient"
+      ],
+      "code": [
+        {
+          "path": "lib/search.py",
+          "finding": "Latent bug: code used --limit for qmd result count but qmd's correct flag is -n; also bumped query timeout to 60s to accommodate first-run llama.cpp compilation"
+        },
+        {
+          "path": "lib/init.py",
+          "finding": "reflect init now runs `qmd skill install --yes` to auto-install the qmd skill alongside reflect's own skill"
+        },
+        {
+          "path": "skill/SKILL.md",
+          "finding": "Updated to document all agentic flags (--json, --files, --min-score, --all, --full, -n, --no-rerank) as first-class examples; now references qmd MCP server option"
+        },
+        {
+          "path": "skill/agents/keeper.md",
+          "finding": "qmd promoted to first rung of evidence ladder; keeper now queries indexed wiki first before broader session/git search"
+        }
+      ],
+      "workflow": [
+        "qmd's --json flag produces structured ranked hits suitable for LLM consumption; --files returns only paths above a relevance floor; --full retrieves complete document content",
+        "llama.cpp is compiled from source on first qmd run, making the initial embed operation significantly slower than subsequent runs",
+        "Verifying import cleanliness after edits (checking for 18 flag mentions in skill) is a useful sanity check before committing"
+      ]
+    },
+    "friction": [
+      "qmd embed was blocked on first-run llama.cpp compilation from source, preventing completion of Test 1 during the session",
+      "The --limit vs -n flag discrepancy in search.py was a silent bug that would only manifest at runtime, not import time"
+    ],
+    "open_items": [
+      "Test 1 query still pending — waiting for background qmd embed task (bhwrn6d3j) to complete before retrying with corrected -n flag",
+      "Full 1-2-3 test sequence not yet validated end-to-end after the agentic flag changes",
+      "MCP server integration mentioned in skill docs but not yet wired into reflect's own tooling"
+    ]
+  },
   "initial_attribution": {
     "calculated_at": "2026-04-12T23:21:16.870791223Z",
     "agent_lines": 116,
