@@ -1,7 +1,10 @@
 """reflect ingest — gather new evidence and write/update wiki pages.
 
-Pipeline: evidence (fixed) → triage subagent (JSON plan) → write subagent (page content) → disk.
+Pipeline: evidence (fixed) → triage subagent (JSON plan) → write subagent (page content) → disk → qmd.
 Two-step design: first decide what to do, then do it.  Avoids wasted writes.
+The triage agent extracts ALL knowledge from sessions — decisions, preferences,
+patterns, brand, business rules, gotchas, etc. — not just coding signals.
+Categories are dynamic: the triage agent can propose new categories.
 """
 
 import json
@@ -22,6 +25,7 @@ from lib.wiki import (
     write_page,
     parse_frontmatter,
     append_log,
+    update_index_md,
 )
 
 
@@ -45,6 +49,34 @@ def _write_last_run(reflect_dir, checkpoint_id, git_sha):
         "timestamp": datetime.now().isoformat(),
     }
     last_run.write_text(json.dumps(state))
+
+
+# ---------------------------------------------------------------------------
+# qmd helpers
+# ---------------------------------------------------------------------------
+
+def _qmd_collection_name():
+    """Derive a unique qmd collection name from the repo directory name."""
+    return f"reflect-{Path.cwd().name}"
+
+
+def _qmd_reindex(verbose=False):
+    """Re-index the qmd collection after wiki changes."""
+    collection = _qmd_collection_name()
+    try:
+        subprocess.run(
+            ["qmd", "update", "-c", collection],
+            capture_output=True, text=True, timeout=60,
+        )
+        subprocess.run(
+            ["qmd", "embed", "-c", collection],
+            capture_output=True, text=True, timeout=120,
+        )
+        if verbose:
+            print(f"  [ingest] qmd re-indexed: {collection}", file=sys.stderr)
+    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+        if verbose:
+            print(f"  [ingest] qmd re-index failed: {e}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -127,9 +159,27 @@ def _call_subagent(prompt, system_prompt, verbose=False, step_name=""):
 # ---------------------------------------------------------------------------
 
 _TRIAGE_SYSTEM = """\
-You are a wiki curator for an AI coding project. You receive new session evidence \
-and an index of existing wiki pages. Your job is to produce a concise JSON triage plan \
-describing what wiki operations to perform.
+You are a knowledge base curator. You receive session evidence (transcripts of \
+human-AI coding sessions and git history) and an index of existing wiki pages. \
+Your job is to extract ALL knowledge worth remembering and produce a JSON triage \
+plan describing what wiki operations to perform.
+
+WHAT TO EXTRACT — look for ANY of these signals in the evidence:
+- Decisions: "we decided X because Y", "let's go with X", "X over Y because..."
+- Preferences: user corrections, style choices, "I prefer X", "always do it this way"
+- Patterns: coding patterns, conventions, "we always use X for Y"
+- Gotchas: things that burned time, surprises, "watch out for X"
+- Pitfalls: mistakes, reverts, failed approaches, "don't do X because Y"
+- Architecture: how the system is structured, why components exist
+- Business: pricing, brand, product decisions, domain knowledge
+- Guides: deployment process, setup steps, workflows
+- Open work: unfinished items, TODOs, "still need to..."
+- ANY other project-specific knowledge that would be useful to remember
+
+CATEGORIES — you may use existing categories or propose NEW ones. Use short, \
+descriptive slugs: decisions, preferences, patterns, gotchas, pitfalls, \
+architecture, business, brand, guides, open-work, conventions, etc. \
+New categories are created automatically.
 
 OUTPUT: Return ONLY valid JSON — no commentary, no markdown fences.
 
@@ -151,9 +201,9 @@ Rules:
 - Use "update" for existing pages where the evidence adds new detail or changes understanding.
 - Use "resolve" for open-work or in-progress pages that are now complete.
 - Skip if evidence adds nothing new.
-- Category slugs must match existing wiki subdirectories.
-- Page slugs must be lowercase, hyphen-separated, descriptive (e.g. "zero-storage-architecture").
+- Page slugs must be lowercase, hyphen-separated, descriptive (e.g. "database-choice", "deploy-process").
 - Keep "reason" under 80 characters.
+- Prefer updating existing pages over creating near-duplicates.
 - Return {"create": [], "update": [], "resolve": []} if no changes are warranted."""
 
 
@@ -164,7 +214,8 @@ def _triage(evidence_doc, index_summary, categories, verbose=False):
     """
     cats_str = ", ".join(categories)
     prompt = (
-        f"Available wiki categories: {cats_str}\n\n"
+        f"Existing wiki categories: {cats_str}\n"
+        f"(You may also propose new categories — directories will be created automatically.)\n\n"
         f"Existing wiki pages:\n{index_summary}\n\n"
         f"New evidence to incorporate:\n\n{evidence_doc}"
     )
@@ -200,18 +251,16 @@ def _triage(evidence_doc, index_summary, categories, verbose=False):
 
 
 def _validate_triage(plan, categories, wiki_dir, verbose=False):
-    """Validate triage plan against known categories and existing pages."""
-    valid_cats = set(categories)
+    """Validate triage plan against existing pages. Creates new category dirs on the fly."""
 
-    # Filter create items to valid categories
-    filtered = []
+    # Allow dynamic categories — create dirs for new ones
     for item in plan.get("create", []):
-        if item["category"] not in valid_cats:
+        cat = item.get("category", "")
+        cat_dir = wiki_dir / cat
+        if not cat_dir.exists() and cat:
+            cat_dir.mkdir(parents=True, exist_ok=True)
             if verbose:
-                print(f"  [ingest/triage] rejected create: unknown category '{item['category']}'", file=sys.stderr)
-            continue
-        filtered.append(item)
-    plan["create"] = filtered
+                print(f"  [ingest/triage] created new category: {cat}/", file=sys.stderr)
 
     # Filter update/resolve to existing paths
     for key in ("update", "resolve"):
@@ -232,9 +281,10 @@ def _validate_triage(plan, categories, wiki_dir, verbose=False):
 # ---------------------------------------------------------------------------
 
 _WRITE_SYSTEM = """\
-You are a wiki page writer for an AI coding project. You receive new session evidence \
-and a request to create or update a wiki page. Produce the COMPLETE page content: \
-YAML frontmatter followed by markdown body.
+You are a knowledge base page writer. You receive session evidence (transcripts \
+of human-AI coding sessions and git history) and a request to create or update a \
+wiki page. Produce the COMPLETE page content: YAML frontmatter followed by \
+markdown body.
 
 FRONTMATTER (YAML between --- fences):
   created: YYYY-MM-DD      (use provided date for new pages; preserve original for updates)
@@ -249,7 +299,11 @@ BODY (markdown):
   - ~200-500 words, focused, factual
   - Use second-level headers (##) to organise if needed
   - Include specific evidence citations inline: (checkpoint <id>) or (commit <sha>)
-  - No fluff, no generic advice — only project-specific knowledge hard to derive from code
+  - Capture the SPECIFIC knowledge: exact values, names, reasons, preferences
+  - No fluff, no generic advice — only project-specific knowledge
+  - For preferences: record the exact preference and any reasoning given
+  - For decisions: record what was chosen, what was rejected, and why
+  - For patterns: record the pattern, when to use it, and examples if available
 
 OUTPUT: Return ONLY the raw page content (frontmatter + body). No commentary. No fences."""
 
@@ -458,11 +512,13 @@ def cmd_ingest(args):
 
     today = datetime.now().strftime("%Y-%m-%d")
 
-    # --- Load format to know valid categories ---
+    # --- Load format to know seeded categories ---
     fmt = load_format(reflect_dir)
     categories = [slugify(s["name"]) for s in fmt.get("sections", [])]
-    if not categories:
-        categories = ["decisions", "friction", "open-work", "pitfalls"]
+    # Also include any existing wiki subdirectories (dynamic categories)
+    for d in wiki_dir.iterdir():
+        if d.is_dir() and not d.name.startswith("_") and d.name not in categories:
+            categories.append(d.name)
 
     # --- Read high-water mark from .last_run ---
     last_run_file = reflect_dir / ".last_run"
@@ -584,6 +640,16 @@ def cmd_ingest(args):
         summary_line = f"{len(written)} page(s) — {n_create} created, {n_update} updated, {n_resolve} resolved"
         detail_lines = [f"{verb} {rel}" for rel, verb in written]
         append_log(wiki_dir, [summary_line] + detail_lines)
+
+    # --- Update index.md ---
+    if written:
+        update_index_md(wiki_dir)
+        if verbose:
+            print("  [ingest] index.md updated", file=sys.stderr)
+
+    # --- Update qmd index ---
+    if written and shutil.which("qmd"):
+        _qmd_reindex(verbose=verbose)
 
     # --- Update freshness state ---
     _write_last_run(reflect_dir, evidence["latest_checkpoint_id"], evidence["latest_git_sha"])

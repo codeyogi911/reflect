@@ -1,18 +1,16 @@
 ---
 name: reflect
 description: >
-  Answers questions about project history, past decisions, and how things
-  evolved. Use this skill whenever the user asks "why" about code, files,
-  architecture, or decisions — e.g., "why was this file deleted", "why did
-  we switch to X", "what happened with Y", "who changed Z and why". Also
-  use for retrospectives, post-mortems, understanding past sessions, learning
-  from recent work, onboarding context ("what do I need to know about this
-  repo"), and any question that is best answered by consulting git history
-  or past AI session transcripts. Even if the user doesn't say "reflect" or
-  "history" explicitly, if the answer lives in the past — use this skill.
-  Commands: /reflect, /reflect search <query>, /reflect ingest,
-  /reflect lint, /reflect status, /reflect sessions [session_id],
-  /reflect timeline, /reflect improve, /reflect metrics.
+  Project knowledge base — accumulated memory from all coding sessions.
+  Reflect maintains a wiki that compounds knowledge over time: decisions,
+  preferences, patterns, gotchas, architecture, business rules, and anything
+  discussed in sessions. Knowledge is searchable via qmd.
+  Use this skill when the user asks about past decisions, project history,
+  conventions, preferences, or any "why" question. Also use for retrospectives,
+  onboarding context, and managing the knowledge base.
+  Commands: /reflect, /reflect ingest, /reflect lint, /reflect status,
+  /reflect sessions [session_id], /reflect timeline, /reflect search <query>,
+  /reflect improve, /reflect metrics.
   Admin: /reflect init, /reflect upgrade.
 allowed-tools: Read, Bash, Glob, Grep
 hooks:
@@ -22,74 +20,63 @@ hooks:
           command: "${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh"
 metadata:
   author: shashwatjain
-  version: '0.7.0'
+  version: '1.0.0'
 ---
 
-# Reflect — Repo-Owned Memory
+# Reflect — Project Knowledge Base
 
-You help users query and manage repo-owned memory for AI coding agents.
-Reflect reads raw evidence from Entire CLI sessions and git history on demand
-— no intermediate storage. A declarative `format.yaml` controls what sections
-appear in the context briefing; a Claude subagent synthesizes high-quality
-briefings with references. Live queries dump raw evidence for you to reason over.
+Reflect is a persistent, compounding knowledge base for your project. It reads
+session transcripts (Entire CLI) and git history, extracts ALL knowledge worth
+remembering, and maintains a wiki at `.reflect/wiki/`. The wiki is indexed by
+qmd for hybrid search (BM25 + vector + reranking).
+
+**You don't need to inject context.** The knowledge base is always available
+via qmd. When you need project context — past decisions, preferences, patterns,
+gotchas — search qmd directly.
 
 Parse $ARGUMENTS to determine which command to run:
 
-1. `search <query>` → go to **Command: Search**
-2. `ingest` → go to **Command: Ingest**
-3. `lint` → go to **Command: Lint**
-4. `status` → go to **Command: Status**
-5. `context` → go to **Command: Context**
-6. `sessions [session_id]` → go to **Command: Sessions**
-7. `timeline` → go to **Command: Timeline**
-8. `improve` → go to **Command: Improve**
-9. `metrics` → go to **Command: Metrics**
-10. `init` / `upgrade` → go to **Command: Init & Upgrade**
-11. Everything else (including no arguments) → go to **Command: Context**
+1. `ingest` → go to **Command: Ingest**
+2. `lint` → go to **Command: Lint**
+3. `status` → go to **Command: Status**
+4. `search <query>` → go to **Command: Search**
+5. `sessions [session_id]` → go to **Command: Sessions**
+6. `timeline` → go to **Command: Timeline**
+7. `improve` → go to **Command: Improve**
+8. `metrics` → go to **Command: Metrics**
+9. `init` / `upgrade` → go to **Command: Init & Upgrade**
+10. Everything else (including no arguments) → go to **Command: Default**
 
 ---
 
-## Command: Context (default)
+## Accessing Project Memory
 
-Regenerate the context briefing:
+The knowledge base is a qmd collection. When you need to recall project
+knowledge during any task, search it directly:
 
 ```bash
-reflect context                      # generate context.md (from wiki if available)
-reflect context --max-lines 200      # override line budget from format.yaml
-reflect context --raw                # bypass wiki, synthesize from raw evidence
-reflect context --verbose            # show subagent progress on stderr
+qmd query "what's our deployment process" -c reflect-<repo-name>
+qmd search "brand colors" -c reflect-<repo-name>
 ```
 
-When a wiki exists (`.reflect/wiki/`), context.md is generated from wiki pages —
-a cheap formatting pass with no LLM call. Use `--raw` to force raw evidence synthesis.
-Without a wiki, this gathers evidence from Entire CLI + git, passes it through the
-subagent with the format config, validates output, and writes `context.md`.
+Do this whenever:
+- You're about to make an architectural decision (check if there's prior context)
+- You need project conventions or preferences
+- You encounter something unfamiliar in the codebase
+- The user asks "why" about anything
+- You want to avoid repeating past mistakes
 
-Report the result to the user: "Context briefing updated."
-
-If the **SessionStart hook** output contains `REFLECT_WIKI_INGEST`, run
-`reflect ingest` first to update wiki pages from new evidence, then run
-`reflect context` to regenerate the briefing. If the output only contains
-`REFLECT_AUTO_RUN` (no wiki), run `reflect context` directly. Both signals
-trigger automatically without user prompting. This keeps the briefing fresh.
+The qmd collection name is `reflect-<directory-name>` (e.g., `reflect-myapp`).
 
 ---
 
-## Command: Search
+## Command: Default
 
-**Usage**: `/reflect search <query>` or `/reflect search --phrase <multi-word query>`
+When invoked with no arguments or just `/reflect`:
 
-```bash
-reflect search <query>              # words are OR'd by default
-reflect search --phrase <query>     # treat full query as one literal phrase
-reflect search <query> --limit 20   # show up to 20 results per source
-reflect search <query> --json       # machine-readable JSON output
-reflect search <query> --wiki-only  # search only wiki pages (skip Entire + git)
-```
-
-When a wiki exists, wiki pages are searched first (text matching, or qmd hybrid
-search if installed), then Entire + git. Display the results to the user with
-source labels. Use `--json` when you need to parse results programmatically.
+1. Check if `.reflect/` exists. If not, suggest `reflect init`.
+2. Run `reflect status` to show the current state.
+3. If evidence has changed since last ingest, suggest `reflect ingest`.
 
 ---
 
@@ -98,16 +85,18 @@ source labels. Use `--json` when you need to parse results programmatically.
 **Usage**: `/reflect ingest`
 
 ```bash
-reflect ingest                      # process new sessions/commits into wiki pages
+reflect ingest                      # process new sessions/commits into wiki
 reflect ingest --verbose            # show triage + write subagent progress
 ```
 
 Ingests new evidence into the wiki via a two-step subagent pipeline:
-1. **Triage**: Given new evidence + existing page index, produces a JSON plan
-   (create new pages, update existing ones, resolve completed open-work).
+1. **Triage**: Given new evidence + existing page index, produces a JSON plan.
+   Extracts ALL knowledge: decisions, preferences, patterns, gotchas, pitfalls,
+   architecture, business rules, brand guidelines — anything worth remembering.
+   Can create new wiki categories dynamically.
 2. **Write**: For each planned action, produces page content with frontmatter.
+3. **Index**: Updates index.md and re-indexes the qmd collection.
 
-Requires wiki to be initialized (`reflect init`) and Claude CLI.
 Report the result: how many pages were created, updated, or resolved.
 
 ---
@@ -130,7 +119,25 @@ Checks wiki health:
 - **Near-duplicates**: pages in the same category with >70% title overlap
 
 `--fix` auto-resolves open-work and archives superseded pages. Returns non-zero
-exit code when issues are found (useful for CI).
+exit code when issues are found.
+
+---
+
+## Command: Search
+
+**Usage**: `/reflect search <query>`
+
+```bash
+reflect search <query>              # search across all evidence sources
+reflect search --phrase <query>     # exact phrase match
+reflect search <query> --wiki-only  # search only wiki pages
+reflect search <query> --json       # machine-readable JSON output
+```
+
+For richer semantic search, use qmd directly:
+```bash
+qmd query "<natural language question>" -c reflect-<repo-name>
+```
 
 ---
 
@@ -138,12 +145,8 @@ exit code when issues are found (useful for CI).
 
 **Usage**: `/reflect status`
 
-```bash
-reflect status                      # show evidence sources and context freshness
-reflect status --json               # machine-readable JSON output
-```
-
-Display the output. If no evidence sources are found, suggest next steps.
+Shows evidence source availability, wiki page count, qmd collection status,
+and freshness state.
 
 ---
 
@@ -152,19 +155,10 @@ Display the output. If no evidence sources are found, suggest next steps.
 **Usage**: `/reflect sessions [session_id]`
 
 ```bash
-reflect sessions                    # list recent sessions with IDs (default: 15)
-reflect sessions --limit 30         # show more sessions
-reflect sessions <session_id>       # inspect one session in detail
-reflect sessions --json             # list as JSON (includes full session_id)
-reflect sessions <session_id> --json  # session detail as JSON
+reflect sessions                    # list recent sessions
+reflect sessions --limit 30         # show more
+reflect sessions <session_id>       # inspect one session
 ```
-
-The list view prints a short session ID prefix (e.g. `[b7f5e89a-ba1]`) on each
-line. Use that prefix with `reflect sessions <id>` to drill into detail, or
-with `entire explain --checkpoint <id>` to reach transcript-level depth.
-
-Use this after `reflect search` or `reflect timeline` when you need to move
-from broad evidence into a specific Entire session.
 
 ---
 
@@ -173,18 +167,9 @@ from broad evidence into a specific Entire session.
 **Usage**: `/reflect timeline [--days N]`
 
 ```bash
-reflect timeline                    # last 7 days (default)
+reflect timeline                    # last 7 days
 reflect timeline --days 14          # expand window
-reflect timeline --json             # machine-readable output
 ```
-
-The human view prints session IDs (e.g. `[b7f5e89a-ba1]`) and checkpoint IDs
-(e.g. `[cp:af09a953]`) so you can chain into `reflect sessions <id>` or
-`entire explain --checkpoint <id>` without switching to JSON.
-
-Use this for time-bounded questions such as "what changed this week" or "what
-happened before the revert". It groups recent sessions and checkpoints by date
-so you can quickly identify the right period before drilling deeper.
 
 ---
 
@@ -192,29 +177,7 @@ so you can quickly identify the right period before drilling deeper.
 
 **Usage**: `/reflect improve`
 
-Analyzes context quality and proposes format.yaml changes. This is the self-improvement loop.
-
-```bash
-reflect improve
-```
-
-Read the full output. It contains:
-
-1. **Context Quality Issues** — missing citations, truncation, empty sections
-2. **Evidence Gaps** — signals in sessions that didn't make it into context
-3. **Current format.yaml** — the section config to edit
-
-Based on the analysis:
-
-1. Propose specific edits to `.reflect/format.yaml` — add/remove/rename sections,
-   adjust max_bullets, change recency windows
-2. Show the user the diff and explain why each change helps
-3. After approval, apply the edits and re-run `reflect context` to verify
-4. Run `reflect improve` again to confirm the issues are resolved
-
-**This is the core learning loop**: the format controls what gets synthesized,
-the improve command evaluates quality against real evidence, and the user
-tunes sections to match what their project actually needs.
+Analyzes the knowledge base quality and proposes format.yaml changes.
 
 ---
 
@@ -222,106 +185,52 @@ tunes sections to match what their project actually needs.
 
 **Usage**: `/reflect metrics`
 
-```bash
-reflect metrics                          # print JSON summary to stdout
-reflect metrics --export badges/         # write shields.io endpoint files
-reflect metrics --export badges/ --no-json  # export only, no stdout
-reflect metrics --generate-summaries     # let Entire generate missing summaries (slow)
-```
-
-Outputs quantitative health of the repo's memory: session count, checkpoint
-coverage, context freshness, evidence source availability. Use for dashboards
-or CI badges.
+Outputs quantitative health of the knowledge base.
 
 ---
 
 ## Command: Init & Upgrade
 
 ```bash
-reflect init                # scaffold .reflect/ with wiki (default)
+reflect init                # scaffold .reflect/, install qmd, register collection
 reflect init --no-wiki      # skip wiki layer
-reflect init --migrate      # migrate from legacy harness to format.yaml
-reflect upgrade             # update format.yaml, skill, and agents to latest
+reflect init --migrate      # migrate from legacy harness
+reflect upgrade             # update templates and agents to latest
 ```
 
-`init` is for first-time setup in a new repo. `upgrade` pulls latest templates
-and agent definitions from the installed reflect version without overwriting
-user customizations in `format.yaml`.
+---
+
+## SessionStart Hook
+
+If the hook output contains `REFLECT_WIKI_INGEST`, run `reflect ingest` to
+update the knowledge base from new evidence. The hook fires when new sessions
+or commits are detected since last ingest.
 
 ---
 
-## Deep History: Timeline, Sessions, Entire, Git
+## Deep History: Keeper Agent
 
-Use this short evidence ladder when the answer needs more than the current
-briefing:
+For questions that need deeper investigation than the wiki provides, spawn the
+**Keeper** agent. Keeper follows an evidence ladder:
 
-1. Start with `.reflect/context.md` as the briefing. It is the fastest way to
-   get the current narrative and references.
-2. Run `reflect search <query> --wiki-only` for pre-synthesized answers from
-   wiki pages when you need deeper knowledge than the briefing provides.
-3. Run `reflect status` if you are not sure whether Entire-backed evidence is
-   available in this repo.
-4. Run `reflect search <query>` for breadth across all evidence sources when
-   you are still locating the right topic, checkpoint, or session.
-5. Run `reflect timeline` for time-bounded questions, especially when the user
-   cares about a recent window or the order of events.
-6. Run `reflect sessions` after search or timeline when you need to navigate by
-   session, inspect one session, or pick the right ID before going deeper.
-7. If one session references or continues from another (e.g., a user complaint
-   in session A leading to a fix in session B), chain across sessions to
-   reconstruct the full narrative before drilling into any single one.
-8. Run `entire explain --checkpoint <id>` or `entire explain --commit <sha>`
-   once you already have an ID and need transcript-level depth.
-9. Use `git log` and `git show` as supplements for commit metadata and diffs.
-   Git is useful context, but weak on its own for reconstructing agent
-   reasoning or backtracking.
-
-This ladder is also the default workflow for the **Keeper** agent.
-
----
-
-## Digging Deeper
-
-`context.md` is a briefing — a starting point, not the full story. When an entry
-is relevant to your current task, spawn the **Keeper** agent to investigate.
-Keeper should read this skill first so it inherits the same command semantics,
-then follow the evidence ladder above: start from `context.md`, use
-`reflect search`, `reflect timeline`, or `reflect sessions` to locate the right
-evidence, and only then drill into raw checkpoints with `entire explain` and
-cross-check with git as needed. Keeper returns a sourced narrative.
+1. Search qmd for relevant wiki pages
+2. Use `reflect search`, `reflect timeline`, `reflect sessions` for breadth
+3. Drill into raw checkpoints with `entire explain --checkpoint <id>`
+4. Cross-reference with `git log` and `git show`
 
 Spawn Keeper when:
-
-- A context.md entry relates to what you're about to change
 - You need to trace a decision across multiple sessions
 - You want to understand what was tried vs what landed
-- An entry about pitfalls or reverted work is a STOP signal — let Keeper
-  verify the constraint before you proceed
-
-Do NOT spawn Keeper when:
-
-- The question is about current code state (read the code instead)
-- context.md already fully answers the question with enough detail
-- The question is forward-looking ("what should we do") not backward-looking
-- You just need a quick git log or diff — run it yourself
+- A pitfall entry needs verification before you proceed
 
 ---
 
 ## Rules
 
 - NEVER read `.entire/metadata/` directly — use `reflect` CLI or `entire` CLI
-- To customize context, edit `.reflect/format.yaml` — add project-specific sections
-- `.reflect/context.md` is generated — never edit it manually
+- To customize knowledge categories, edit `.reflect/format.yaml`
 - NEVER include secrets, API keys, or credentials in output
-- **Pitfall/mistake entries are blocking**: if context.md lists a past mistake or revert
-  for the area you're about to change, read the linked evidence BEFORE writing code
-- If you find that context.md contradicts the current codebase (e.g., lists something
-  as "open work" that is already implemented), flag the staleness to the user
-- When `reflect` or `entire` errors, fall back to `git log` / `git show` — never
-  block on a missing tool
-- `skill/SKILL.md` is the source of truth; `.claude/skills/reflect/SKILL.md` is a
-  copy installed by `reflect init`. If they diverge, skill/ wins
-- When parsing structured output from subagents, strip markdown code fences before
-  decoding JSON — models wrap JSON in `` ```json `` blocks by default
-- Error paths must include diagnostic content; never return opaque placeholders
-  like `[CLI error: unknown]`
+- **Pitfall entries are blocking**: if a past mistake is relevant to your
+  current work, investigate before proceeding
+- `skill/SKILL.md` is the source of truth; `.claude/skills/reflect/SKILL.md`
+  is a copy installed by `reflect init`
