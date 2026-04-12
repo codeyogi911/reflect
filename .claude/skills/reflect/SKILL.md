@@ -51,22 +51,69 @@ Parse $ARGUMENTS to determine which command to run:
 
 ## Accessing Project Memory
 
-The knowledge base is a qmd collection. When you need to recall project
-knowledge during any task, search it directly:
+The knowledge base is a qmd collection named `reflect-<directory-name>`
+(e.g., `reflect-myapp`). When you need to recall project knowledge during any
+task, query it directly — qmd provides structured output built for agents.
+
+**Use these patterns — always prefer `--json` or `--files` over plain output:**
 
 ```bash
-qmd query "what's our deployment process" -c reflect-<repo-name>
-qmd search "brand colors" -c reflect-<repo-name>
+# Get ranked hits with snippets + scores (best for reasoning over results)
+qmd query "why do we use Supabase" -c reflect-myapp --json
+
+# Get just the file paths above a relevance threshold, then read them yourself
+qmd query "deployment process" -c reflect-myapp --files --min-score 0.4
+
+# Get all matches (not top-10) above a threshold
+qmd query "brand colors" -c reflect-myapp --all --min-score 0.5 --json
+
+# Retrieve full document content when you need the complete page
+qmd get decisions/database-choice.md --full -c reflect-myapp
+
+# Grab a line range from a large page
+qmd get guides/deployment.md:20 -l 40 -c reflect-myapp
+
+# Batch fetch related pages via glob
+qmd multi-get "decisions/*.md" -c reflect-myapp --json
+
+# Pure keyword search (BM25, no LLM — fastest)
+qmd search "stripe webhook" -c reflect-myapp --json
+
+# Pure semantic search (vector similarity)
+qmd vsearch "how do we handle payment retries" -c reflect-myapp --json
 ```
 
-Do this whenever:
+**Query type cheat sheet:**
+- `qmd query` — hybrid (BM25 + vector + LLM reranking) — best quality, use by default
+- `qmd search` — BM25 only — fastest, best for exact keywords/names/code
+- `qmd vsearch` — vector only — best for semantic questions
+- `qmd get` — retrieve a specific page by path
+- `qmd multi-get` — batch fetch via glob pattern
+
+**Key agentic flags:**
+- `--json` — structured output (prefer this over plain text)
+- `--files` — paths only, one per line (for `xargs`, `cat`, agent self-read)
+- `--min-score <N>` — threshold filter (0.4-0.6 is a reasonable floor)
+- `--all` — return all matches above threshold, not just top-N
+- `--full` — full document content (for `qmd get`)
+- `-n <N>` — limit results (default 10)
+- `--no-rerank` — skip LLM reranking (faster on CPU)
+- `-c <collection>` — scope to a specific collection
+
+Use project memory whenever:
 - You're about to make an architectural decision (check if there's prior context)
-- You need project conventions or preferences
+- You need project conventions, preferences, or brand guidelines
 - You encounter something unfamiliar in the codebase
 - The user asks "why" about anything
 - You want to avoid repeating past mistakes
 
-The qmd collection name is `reflect-<directory-name>` (e.g., `reflect-myapp`).
+**A dedicated `qmd` skill is also installed** (`.claude/skills/qmd/`) with
+detailed guidance on lex/vec/hyde query types, intent steering, and combining
+search types. Consult it for advanced queries.
+
+**qmd also ships an MCP server** (`qmd mcp`) that exposes `query`, `get`, and
+`status` tools via stdio. If you prefer MCP tool calls over shelling out to
+Bash, register qmd as an MCP server in your agent config.
 
 ---
 

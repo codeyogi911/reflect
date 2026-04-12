@@ -6,3 +6,9 @@
 __pycache__/
 *.pyc
 bench/results/tmp-*
+
+# Tool-managed artifacts (installed by `reflect init` via their own tools)
+.agents/
+.claude/skills/qmd
+.reflect/.last_run
+.reflect/context.md
