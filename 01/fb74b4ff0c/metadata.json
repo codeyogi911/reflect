@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "01fb74b4ff0c",
+  "strategy": "manual-commit",
+  "branch": "claude/reflect-knowledge-base-eWubY",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".reflect/wiki/log.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/01/fb74b4ff0c/0/metadata.json",
+      "transcript": "/01/fb74b4ff0c/0/full.jsonl",
+      "content_hash": "/01/fb74b4ff0c/0/content_hash.txt",
+      "prompt": "/01/fb74b4ff0c/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 3488,
+    "cache_creation_tokens": 649420,
+    "cache_read_tokens": 38779658,
+    "output_tokens": 109425,
+    "api_call_count": 219
+  }
+}

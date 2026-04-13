@@ -1,0 +1,86 @@
+{
+  "cli_version": "0.5.4",
+  "checkpoint_id": "01fb74b4ff0c",
+  "session_id": "a9ead018-1a97-45ed-b60d-bbadab206a38",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-13T02:06:38.003834223Z",
+  "branch": "claude/reflect-knowledge-base-eWubY",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".reflect/wiki/log.md"
+  ],
+  "agent": "Claude Code",
+  "model": "",
+  "turn_id": "014d9d05fd17",
+  "token_usage": {
+    "input_tokens": 3488,
+    "cache_creation_tokens": 649420,
+    "cache_read_tokens": 38779658,
+    "output_tokens": 109425,
+    "api_call_count": 219
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-13T02:06:36.394664817Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 0,
+    "total_lines_changed": 0,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 1663,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".reflect/wiki/decisions/dynamic-wiki-categories.md": 29,
+        ".reflect/wiki/decisions/no-context-injection-model.md": 61,
+        ".reflect/wiki/decisions/qmd-collection-naming.md": 32,
+        ".reflect/wiki/decisions/qmd-first-evidence-ladder.md": 36,
+        ".reflect/wiki/decisions/sessions-source-of-truth.md": 45,
+        ".reflect/wiki/decisions/wiki-index-lifecycle.md": 39,
+        ".reflect/wiki/decisions/zero-storage-architecture.md": 52,
+        ".reflect/wiki/gotchas/bash-wrapper-process-hang.md": 49,
+        ".reflect/wiki/gotchas/empty-wiki-embed-skip.md": 36,
+        ".reflect/wiki/gotchas/git-stop-hook-requirement.md": 25,
+        ".reflect/wiki/gotchas/piping-output-masks-progress.md": 48,
+        ".reflect/wiki/gotchas/repo-specific-collection-names.md": 31,
+        ".reflect/wiki/gotchas/stale-qmd-collections.md": 37,
+        ".reflect/wiki/gotchas/symlink-hooks-directory.md": 34,
+        ".reflect/wiki/gotchas/vulkan-cpu-precedence.md": 32,
+        ".reflect/wiki/guides/critical-pitfalls-detection.md": 46,
+        ".reflect/wiki/guides/high-water-mark-incremental-ingest.md": 43,
+        ".reflect/wiki/guides/keeper-agent-focused-design.md": 79,
+        ".reflect/wiki/guides/qmd-installation-and-setup.md": 57,
+        ".reflect/wiki/guides/reflect-init-idempotent-flow.md": 64,
+        ".reflect/wiki/guides/testing-from-clean-state.md": 61,
+        ".reflect/wiki/guides/wiki-layer-persistent-knowledge.md": 57,
+        ".reflect/wiki/index.md": 53,
+        ".reflect/wiki/log.md": 38,
+        ".reflect/wiki/open-work/full-test-sequence-validation.md": 50,
+        ".reflect/wiki/open-work/gitignore-transient-artifacts.md": 29,
+        ".reflect/wiki/open-work/ingest-evidence-stall-investigation.md": 46,
+        ".reflect/wiki/open-work/ingest-test-with-new-triage.md": 64,
+        ".reflect/wiki/open-work/llama-cpp-prebuilt-or-caching.md": 36,
+        ".reflect/wiki/open-work/mcp-server-integration.md": 38,
+        ".reflect/wiki/patterns/llama-cpp-performance-profile.md": 46,
+        ".reflect/wiki/patterns/qmd-advanced-query-grammar.md": 33,
+        ".reflect/wiki/patterns/qmd-query-types-agentic-flags.md": 52,
+        ".reflect/wiki/patterns/wiki-archiving-strategy.md": 40,
+        ".reflect/wiki/pitfalls/concurrent-qmd-duplicate-builds.md": 36,
+        ".reflect/wiki/pitfalls/reflect-ingest-stalls.md": 42,
+        ".reflect/wiki/pitfalls/search-flag-bug-limit-vs-n.md": 27,
+        ".reflect/wiki/pitfalls/silent-skip-embed-existing-wikis.md": 40
+      }
+    }
+  ]
+}
