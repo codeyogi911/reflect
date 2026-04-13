@@ -61,22 +61,51 @@ def _qmd_collection_name():
 
 
 def _qmd_reindex(verbose=False):
-    """Re-index the qmd collection after wiki changes."""
+    """Re-index the qmd collection after wiki changes.
+
+    Runs `qmd update` (fast, updates BM25 index) and `qmd embed` (slow,
+    generates vector embeddings). Embedding on CPU can take several minutes
+    for large wikis — timeout is generous. Progress is shown on stderr.
+    """
     collection = _qmd_collection_name()
+
+    # qmd update is fast — BM25 index refresh only
     try:
         subprocess.run(
             ["qmd", "update", "-c", collection],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True, text=True, timeout=60, check=False,
         )
-        subprocess.run(
-            ["qmd", "embed", "-c", collection],
-            capture_output=True, text=True, timeout=120,
-        )
-        if verbose:
-            print(f"  [ingest] qmd re-indexed: {collection}", file=sys.stderr)
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-        if verbose:
-            print(f"  [ingest] qmd re-index failed: {e}", file=sys.stderr)
+        print(f"  [ingest] qmd update failed: {e}", file=sys.stderr)
+        return
+
+    # qmd embed is slow on CPU — show live progress to stderr.
+    # On headless/driverless machines, users may need QMD_LLAMA_GPU=false.
+    print("  [ingest] Generating qmd embeddings (may take a few minutes)...", file=sys.stderr)
+    try:
+        result = subprocess.run(
+            ["qmd", "embed", "-c", collection],
+            stdout=sys.stderr, stderr=sys.stderr,
+            timeout=900,  # 15 min — generous for CPU embedding
+            check=False,
+        )
+        if result.returncode == 0:
+            if verbose:
+                print(f"  [ingest] qmd re-indexed: {collection}", file=sys.stderr)
+        else:
+            print(
+                f"  [ingest] qmd embed failed (exit {result.returncode}). "
+                f"If you're on a headless machine, try: QMD_LLAMA_GPU=false reflect ingest",
+                file=sys.stderr,
+            )
+    except subprocess.TimeoutExpired:
+        print(
+            f"  [ingest] qmd embed timed out after 15 minutes. "
+            f"If you're on a headless machine, try: QMD_LLAMA_GPU=false reflect ingest",
+            file=sys.stderr,
+        )
+    except FileNotFoundError as e:
+        print(f"  [ingest] qmd embed failed: {e}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------

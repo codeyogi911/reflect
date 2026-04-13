@@ -27,7 +27,12 @@ def _run(cmd, timeout=30):
 
 
 def _install_qmd():
-    """Install qmd if not present. Returns True if qmd is available after this call."""
+    """Install qmd if not present. Returns True if qmd is available after this call.
+
+    On headless/driverless machines where Vulkan/CUDA isn't available, users
+    may need to set `QMD_LLAMA_GPU=false` before running `reflect ingest`
+    so qmd skips the GPU backend and uses the CPU prebuilt binary directly.
+    """
     if shutil.which("qmd"):
         return True
 
