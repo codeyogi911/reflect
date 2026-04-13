@@ -24,6 +24,68 @@
   "session_metrics": {
     "turn_count": 1
   },
+  "summary": {
+    "intent": "Evolve reflect from a narrow AI session-memory tool into a universal repo knowledge base that compiles all session knowledge into a compounding wiki, queryable via qmd, with no context injection model.",
+    "outcome": "Successfully implemented and pushed the v1.0.0 knowledge base transformation: qmd made required with auto-install, dynamic wiki categories, broader ingest triage prompt, index.md generation, qmd re-indexing after ingest, and skill rewritten to tell agents to query qmd directly instead of injecting context.md.",
+    "learnings": {
+      "repo": [
+        "Sessions are the sole source of truth — every decision, preference, brand guideline, and correction flows through Entire CLI sessions, making external source adapters unnecessary.",
+        "The old model (4 hardcoded wiki categories + context.md injection) is being replaced by: dynamic categories proposed by the triage subagent + agents self-serving via qmd queries.",
+        "qmd collection naming uses `reflect-\u003crepo-name\u003e` convention to avoid collisions across multiple repos.",
+        "qmd npm package is `@tobilu/qmd`, installs globally via `npm install -g @tobilu/qmd` or `bun install -g @tobilu/qmd`.",
+        "Wiki index growth is bounded by lint: stale pages archive to `_archive/`, resolved items move out, duplicates merge — index reflects only active pages.",
+        "The skill's new role is to tell agents 'you have memory, query qmd collection reflect-\u003crepo\u003e' rather than reading an injected context.md file.",
+        "reflect init is idempotent and now handles qmd install + collection registration as part of setup.",
+        "The `.claude/agents/entire-search.md`, `.claude/skills/reflect/SKILL.md`, and `.claude/skills/reflect/hooks/session-start.sh` files were modified by init but not committed — caught by stop hook."
+      ],
+      "code": [
+        {
+          "path": "lib/init.py",
+          "finding": "Updated to auto-install qmd via npm, register collection as `reflect-\u003crepo\u003e`, and remove context.md injection wiring from `_wire_agents`."
+        },
+        {
+          "path": "lib/ingest.py",
+          "finding": "Triage prompt rewritten to extract ALL knowledge types (brand, preferences, patterns, business decisions, etc.) not just 4 session signals. Dynamic category creation: new dirs created on the fly. Added `_qmd_reindex` helper that runs `qmd update` + `qmd embed` after every ingest."
+        },
+        {
+          "path": "lib/wiki.py",
+          "finding": "Added `update_index_md()` function that generates a committed, human/LLM-readable table of contents showing only active pages — bounded by lint archiving."
+        },
+        {
+          "path": "skill/SKILL.md",
+          "finding": "Fully rewritten: agents are told to query qmd collection directly instead of reading context.md. No injection model."
+        },
+        {
+          "path": "hooks/session-start.sh",
+          "finding": "Simplified to only signal REFLECT_WIKI_INGEST — no context generation step."
+        },
+        {
+          "path": "lib/version.py",
+          "finding": "Bumped to 1.0.0 to mark the knowledge base architecture milestone."
+        }
+      ],
+      "workflow": [
+        "The pattern 'Reflect writes, qmd reads' cleanly separates concerns — reflect owns ingestion/wiki maintenance, qmd owns retrieval.",
+        "Testing qmd auto-install via `reflect init` on an already-initialized repo is safe and idempotent.",
+        "Running `reflect init` after skill changes causes Claude Code to hot-reload the skill immediately (visible in system reminders).",
+        "Wiping `.reflect/.last_run` forces ingest to reprocess all history — useful for testing new triage prompts against existing session data.",
+        "Stop hook correctly caught that init-modified files (.claude/agents/, .claude/skills/) were not staged for commit."
+      ]
+    },
+    "friction": [
+      "qmd auto-install requires npm global write permissions which may fail in some environments — bun is the fallback.",
+      "The existing wiki was built with the old 4-category triage; testing the new broader extraction requires a manual wiki wipe and fresh ingest.",
+      "Stop hook flagged uncommitted changes in .claude/ files modified by `reflect init` — these are installation artifacts that need to be committed or gitignored."
+    ],
+    "open_items": [
+      "Test the new broader triage prompt against real sessions via wiki wipe + fresh ingest to verify dynamic category creation works as designed.",
+      "Test qmd query path end-to-end: `qmd query '\u003cquestion\u003e' -c reflect-reflect` against the indexed wiki.",
+      "Decide whether .claude/agents/ and .claude/skills/ files modified by `reflect init` should be committed to the repo or added to .gitignore.",
+      "Wiki compaction strategy (merging related pages when wiki grows large) is noted as future work — not yet implemented.",
+      "Global memory layer (`~/.reflect/memory/`) for cross-repo agent preferences was deferred to a future phase.",
+      "Multi-output context formats (onboarding, architecture overview) were discussed but not implemented in this phase."
+    ]
+  },
   "initial_attribution": {
     "calculated_at": "2026-04-12T23:07:07.233292504Z",
     "agent_lines": 132,
