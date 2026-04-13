@@ -134,6 +134,7 @@ When invoked with no arguments or just `/reflect`:
 ```bash
 reflect ingest                      # process new sessions/commits into wiki
 reflect ingest --verbose            # show triage + write subagent progress
+reflect ingest --force              # suppress non-default-branch warning
 ```
 
 Ingests new evidence into the wiki via a two-step subagent pipeline:
@@ -145,6 +146,23 @@ Ingests new evidence into the wiki via a two-step subagent pipeline:
 3. **Index**: Updates index.md and re-indexes the qmd collection.
 
 Report the result: how many pages were created, updated, or resolved.
+
+### Branch Policy (Important)
+
+The wiki is **project memory** — it belongs on the default branch (`main`),
+not on feature branches. Recommended workflow:
+
+```
+1. Develop on feature branches → sessions accumulate in Entire CLI
+2. Merge feature branch into main
+3. On main: reflect ingest    ← updates canonical wiki
+```
+
+`reflect ingest` warns when run on a non-default branch because branch-local
+wiki updates create silos and merge conflicts. Entire CLI captures sessions
+globally, so ingesting on main still picks up conversations that happened
+on any branch. Use `--force` only when you intentionally want a branch-local
+wiki (e.g., for experimentation).
 
 ---
 

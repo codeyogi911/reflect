@@ -60,6 +60,57 @@ def _qmd_collection_name():
     return f"reflect-{Path.cwd().name}"
 
 
+# ---------------------------------------------------------------------------
+# Branch helpers (Strategy A: wiki belongs on the default branch)
+# ---------------------------------------------------------------------------
+
+def _get_current_branch():
+    """Return the current git branch name, or None if not in a git repo."""
+    try:
+        result = subprocess.run(
+            ["git", "branch", "--show-current"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip() or None
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+    return None
+
+
+def _get_default_branch():
+    """Detect the repo's default branch (main, master, etc.).
+
+    Tries `origin/HEAD` first (most reliable), then falls back to common names.
+    Returns None if no default branch can be detected.
+    """
+    # Try origin/HEAD symbolic ref — this is what `git remote set-head` sets
+    try:
+        result = subprocess.run(
+            ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            # e.g. "refs/remotes/origin/main" → "main"
+            return result.stdout.strip().rsplit("/", 1)[-1]
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        pass
+
+    # Fall back to checking common default branch names
+    for branch in ("main", "master", "trunk"):
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "--verify", branch],
+                capture_output=True, text=True, timeout=5,
+            )
+            if result.returncode == 0:
+                return branch
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            continue
+
+    return None
+
+
 def _qmd_reindex(verbose=False):
     """Re-index the qmd collection after wiki changes.
 
@@ -517,6 +568,7 @@ def cmd_ingest(args):
     reflect_dir = Path(".reflect")
     wiki_dir = reflect_dir / "wiki"
     verbose = getattr(args, "verbose", False)
+    force = getattr(args, "force", False)
 
     # Guard: .reflect/ must exist
     if not reflect_dir.exists():
@@ -538,6 +590,34 @@ def cmd_ingest(args):
             file=sys.stderr,
         )
         return 1
+
+    # --- Branch policy: wiki belongs on the default branch ---
+    # Strategy A: warn (don't block) when ingesting on a non-default branch.
+    # The wiki is project memory and should not fork along feature branches.
+    current_branch = _get_current_branch()
+    default_branch = _get_default_branch()
+    if current_branch and default_branch and current_branch != default_branch and not force:
+        print(
+            f"Warning: ingesting on '{current_branch}' (default branch: '{default_branch}').",
+            file=sys.stderr,
+        )
+        print(
+            f"  Wiki updates here will not appear on other branches until merged.",
+            file=sys.stderr,
+        )
+        print(
+            f"  Recommended workflow: merge feature branches into '{default_branch}',",
+            file=sys.stderr,
+        )
+        print(
+            f"  then run 'reflect ingest' on '{default_branch}' to update canonical knowledge.",
+            file=sys.stderr,
+        )
+        print(
+            f"  Use --force to suppress this warning.",
+            file=sys.stderr,
+        )
+        print(file=sys.stderr)
 
     today = datetime.now().strftime("%Y-%m-%d")
 

@@ -233,6 +233,35 @@ to trigger `reflect ingest`.
 **Commit**: `.reflect/format.yaml`, `.reflect/config.yaml`, `.reflect/wiki/`
 **Gitignore**: `.reflect/.last_run`
 
+### Branch Policy
+
+The wiki is **project memory** and should live on the default branch (`main`),
+not on feature branches. This is the recommended workflow:
+
+```
+1. Develop on feature branches as usual — sessions accumulate in Entire CLI
+2. Merge feature branch into main when ready
+3. On main, run: reflect ingest
+4. The wiki on main now reflects all evidence, including branch sessions
+```
+
+**Why this works:**
+- Entire CLI checkpoints are stored globally, not per-branch. `reflect ingest`
+  uses `entire explain --search-all` to pull checkpoints from any branch, so
+  ingesting on main still captures conversations that happened on feature
+  branches.
+- Git history is fully visible from any branch ancestor, so commits made on
+  feature branches are visible to the ingest pipeline once merged.
+
+**Why not branch-local wikis:**
+- Knowledge silos: pages on branch A don't appear on branch B
+- Merge conflicts: `index.md` and shared pages conflict on every merge
+- Stale qmd index: the index doesn't auto-rebuild on branch switch
+
+**Guardrail**: `reflect ingest` prints a warning when run on a non-default
+branch. Use `--force` to suppress it if you intentionally want a branch-local
+wiki (e.g., for experimentation).
+
 ---
 
 ## 12. Security

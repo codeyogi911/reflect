@@ -166,9 +166,17 @@ Examples:
         epilog="""\
 Examples:
   reflect ingest              # process new sessions/commits into wiki pages
-  reflect ingest --verbose    # show subagent progress""",
+  reflect ingest --verbose    # show subagent progress
+  reflect ingest --force      # skip the non-default-branch warning
+
+Branch policy:
+  The wiki is project memory and should live on the default branch (main).
+  Running 'reflect ingest' on a feature branch prints a warning because
+  the wiki updates won't appear on other branches until merged. Use --force
+  to suppress the warning when you intentionally want a branch-local wiki.""",
     )
     ingest.add_argument("--verbose", action="store_true", help="Show subagent progress on stderr")
+    ingest.add_argument("--force", action="store_true", help="Suppress the non-default-branch warning")
 
     # reflect lint
     lint = subparsers.add_parser(
