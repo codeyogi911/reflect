@@ -38,9 +38,14 @@ def _qmd_collection_name():
 
 
 def _search_qmd(query, limit):
-    """Search wiki via qmd hybrid search."""
-    cmd = ["qmd", "query", query, "-c", _qmd_collection_name(), "--json", "--limit", str(limit)]
-    raw = run(cmd, timeout=30)
+    """Search wiki via qmd hybrid search (BM25 + vector + reranking)."""
+    cmd = [
+        "qmd", "query", query,
+        "-c", _qmd_collection_name(),
+        "--json",
+        "-n", str(limit),
+    ]
+    raw = run(cmd, timeout=60)
     if not raw:
         return []
     try:

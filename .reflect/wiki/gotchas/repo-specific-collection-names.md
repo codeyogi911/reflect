@@ -1,33 +1,31 @@
 ---
-created: 2026-04-09
-updated: 2026-04-09
-sources: [commit 7b17590, commit 1be188b, commit 2f5ad53]
-tags: [multi-repo, collections, naming]
+created: 2026-04-13
+updated: 2026-04-13
+sources: [checkpoint 4ecb34b81a12, checkpoint 9c595bc9b42d, commit 53c09c4]
+tags: [qmd, collections, naming, multi-repo]
 status: active
 ---
 
-# Repo-Specific Collection Names Prevent Collisions
+# Repo-Specific Collection Names Required
 
-## The Problem
+qmd collections must follow the `reflect-<repo-name>` naming convention to isolate knowledge across multiple repositories on the same machine. (checkpoint 4ecb34b81a12)
 
-When multiple repositories use reflect in a shared environment (monorepo, local dev machine, or shared CI runners), QMD collections with identical names will collide. Two separate projects, each with their own `.reflect/` directory, might both create a collection named `docs` or `codebase`. Without namespacing, evidence from different repos mixes in the same collection, causing cross-contamination during ingestion, search, and wiki compounding.
+## Why This Matters
 
-## The Solution
+When you initialize reflect on a repository with `reflect init`, it registers a qmd collection named `reflect-<repo-name>`. Each repository gets its own isolated collection so queries don't accidentally cross repo boundaries. If you attempt to use a generic or ambiguous collection name across multiple repos, you risk knowledge from one repository bleeding into queries for another, incorrect semantic search results due to mixed context, and confusion about which wiki pages belong to which repo.
 
-Reflect applies a repo-identifier prefix to all QMD collection names (commit 7b17590). This ensures each repository's collections are namespaced uniquely: `project-a/docs` vs. `project-b/docs`, keeping evidence strictly isolated.
+## The Gotcha
 
-This is critical for workflows relying on persistent collection state:
-- **High-water mark tracking** (commit 2f5ad53): incremental ingestion must not conflict across repos; if two repos wrote to the same collection, already-ingested evidence would be incorrectly re-marked
-- **Wiki layer** (commit 1be188b): compounding knowledge must draw only from the correct repo's collected evidence, not leaked evidence from parallel runs
+The naming convention is **not optional** — it's baked into reflect's initialization and query logic. When you run `reflect init`, the tool automatically registers the collection as `reflect-<repo-name>` where `<repo-name>` is derived from your repository's directory or git remote.
 
-## When This Matters
+**Critical**: When wiping `.reflect/` state (e.g., during testing or recovery), you must also explicitly remove the stale qmd collection. Simply deleting `.reflect/` leaves the qmd collection registered with broken path references, which will cause subsequent ingest operations to fail. (checkpoint 9c595bc9b42d)
 
-**Monorepos**: multiple services or components may each run reflect agents; collections must be scoped per service to avoid mixing evidence.
+## Cleanup
 
-**Local dev machines**: a developer working on multiple projects simultaneously will have separate `.reflect/` directories; QMD engines must not cross-pollinate collections between them.
+If you wipe `.reflect/` manually, clean up qmd collections before re-initializing:
 
-**Parallel CI/CD**: test runs or deployments across repos executing concurrently must maintain isolated collection state. Without repo-specific names, concurrent writes to the same collection cause race conditions and data loss.
+```bash
+qmd rm reflect-<repo-name>
+```
 
-## Implementation Detail
-
-The repo identifier (typically derived from the repo slug or hash) prefixes every collection name before it reaches the QMD backend. All subsequent operations—ingestion, search, wiki compounding—work within the scoped namespace transparently.
+This removes the stale collection registration so `reflect init` can register a fresh one with correct paths.

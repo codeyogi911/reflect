@@ -1,4 +1,4 @@
-"""reflect init — one-stop setup: install Entire, enable it, create .reflect/."""
+"""reflect init — one-stop setup: install deps, create .reflect/, wire qmd."""
 
 import os
 import shutil
@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 ENTIRE_INSTALL_URL = "https://entire.io/install.sh"
+QMD_NPM_PACKAGE = "@tobilu/qmd"
 
 
 def _qmd_collection_name():
@@ -23,6 +24,42 @@ def _run(cmd, timeout=30):
         return result.returncode == 0, result.stdout.strip()
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return False, ""
+
+
+def _install_qmd():
+    """Install qmd if not present. Returns True if qmd is available after this call.
+
+    On headless/driverless machines where Vulkan/CUDA isn't available, users
+    may need to set `QMD_LLAMA_GPU=false` before running `reflect ingest`
+    so qmd skips the GPU backend and uses the CPU prebuilt binary directly.
+    """
+    if shutil.which("qmd"):
+        return True
+
+    print("Installing qmd (knowledge base search engine)...")
+
+    # Try npm first
+    if shutil.which("npm"):
+        ok, out = _run(["npm", "install", "-g", QMD_NPM_PACKAGE], timeout=120)
+        if ok and shutil.which("qmd"):
+            print("qmd installed via npm.")
+            return True
+
+    # Try bun
+    if shutil.which("bun"):
+        ok, out = _run(["bun", "install", "-g", QMD_NPM_PACKAGE], timeout=120)
+        if ok and shutil.which("qmd"):
+            print("qmd installed via bun.")
+            return True
+
+    # Try npx availability check (user can use npx as fallback)
+    print(
+        f"Could not auto-install qmd. Install manually:\n"
+        f"  npm install -g {QMD_NPM_PACKAGE}\n"
+        f"Then re-run: reflect init",
+        file=sys.stderr,
+    )
+    return False
 
 
 def _install_entire():
@@ -70,11 +107,15 @@ def _enable_entire():
 
 
 def cmd_init(args):
-    """One-stop setup: install Entire, enable it, create .reflect/."""
+    """One-stop setup: install deps, create .reflect/, register qmd collection."""
     reflect_dir = Path(".reflect")
     migrate = hasattr(args, "migrate") and args.migrate
 
-    # --- Step 1: Entire CLI ---
+    # --- Step 1a: qmd (required) ---
+    if not _install_qmd():
+        return 1
+
+    # --- Step 1b: Entire CLI ---
     has_entire = shutil.which("entire") is not None
 
     if not has_entire:
@@ -82,7 +123,7 @@ def cmd_init(args):
         if installed:
             has_entire = True
         else:
-            print("Continuing without Entire CLI (context will use git-only evidence).")
+            print("Continuing without Entire CLI (knowledge base will use git-only evidence).")
 
     if has_entire:
         _enable_entire()
@@ -133,16 +174,33 @@ def cmd_init(args):
         wiki_dir = init_wiki(reflect_dir, fmt["sections"])
         print(f"Wiki initialized: {wiki_dir}/")
 
-    # --- Step 2c: qmd collection (if qmd available and wiki initialized) ---
-    if wiki and shutil.which("qmd"):
+    # --- Step 2c: qmd collection (required) ---
+    if wiki:
         wiki_path = str(wiki_dir.resolve())
         collection_name = _qmd_collection_name()
         ok, _ = _run(["qmd", "collection", "add", wiki_path, "--name", collection_name])
         if ok:
-            _run(["qmd", "context", "add", f"qmd://{collection_name}", "Project memory: decisions, pitfalls, patterns, open work"])
+            _run(["qmd", "context", "add", f"qmd://{collection_name}",
+                  "Project knowledge base: decisions, patterns, preferences, gotchas, and all knowledge accumulated from coding sessions"])
             print(f"qmd collection registered: {collection_name}")
         else:
-            print(f"qmd: collection {collection_name} already registered (or qmd error)")
+            print(f"qmd: collection {collection_name} already registered")
+
+        # Seed embeddings if pages already exist (e.g., re-init on existing wiki)
+        has_pages = any(
+            f.is_file() and f.suffix == ".md" and f.name not in ("index.md", "log.md")
+            for d in wiki_dir.iterdir() if d.is_dir() and not d.name.startswith("_")
+            for f in d.iterdir()
+        )
+        if has_pages:
+            print("Seeding qmd embeddings for existing wiki pages...")
+            _run(["qmd", "update", "-c", collection_name], timeout=60)
+            _run(["qmd", "embed", "-c", collection_name], timeout=300)
+
+        # Install qmd's own skill so agents know how to query it effectively
+        ok, _ = _run(["qmd", "skill", "install", "--yes"], timeout=30)
+        if ok:
+            print("qmd skill installed: .claude/skills/qmd/")
 
     # --- Step 3: Install skill + hooks ---
     _install_skill()
@@ -154,9 +212,10 @@ def cmd_init(args):
     if already_initialized:
         print(".reflect/ already initialized. Setup checked.")
     else:
-        print("Initialized .reflect/ with default format.")
-        print("Run `reflect context` to generate your first context briefing.")
-        print("Edit .reflect/format.yaml to customize sections for your project.")
+        print("Initialized .reflect/ — knowledge base ready.")
+        print(f"qmd collection: {_qmd_collection_name()}")
+        print("Run `reflect ingest` to seed the knowledge base from session history.")
+        print("Edit .reflect/format.yaml to customize knowledge categories.")
     return 0
 
 
@@ -271,38 +330,22 @@ def cmd_upgrade(args):
 
 
 def _wire_agents():
-    """Wire context.md into agent instruction files."""
+    """Ensure CLAUDE.md exists and .gitignore is set up."""
     # Claude Code
-    context_ref = "@.reflect/context.md"
     claude_md = Path("CLAUDE.md")
-    if claude_md.exists():
-        content = claude_md.read_text()
-        if context_ref not in content:
-            with open(claude_md, "a") as f:
-                f.write(f"\n{context_ref}\n")
-            print(f"Added {context_ref} reference to CLAUDE.md")
-    else:
-        claude_md.write_text(f"# CLAUDE.md\n\n{context_ref}\n")
-        print("Created CLAUDE.md with @.reflect/context.md reference")
-
-    # Other agents
-    other_agents = [
-        (".cursorrules", "Cursor", ".cursorrules"),
-        (".cursor/rules", "Cursor", ".cursor/rules/reflect.md"),
-        (".github/copilot-instructions.md", "Copilot", ".github/copilot-instructions.md"),
-        (".windsurfrules", "Windsurf", ".windsurfrules"),
-    ]
-    for check_path, agent_name, target in other_agents:
-        if Path(check_path).exists():
-            print(f"Tip: For {agent_name}, paste the output of `reflect context` into {target}")
+    if not claude_md.exists():
+        claude_md.write_text("# CLAUDE.md\n")
+        print("Created CLAUDE.md")
 
     # .gitignore
     gitignore = Path(".gitignore")
+    entries_needed = [".reflect/.last_run"]
     if gitignore.exists():
         content = gitignore.read_text()
-        if ".reflect/context.md" not in content:
-            print("Tip: Add .reflect/context.md and .reflect/.last_run to .gitignore")
+        missing = [e for e in entries_needed if e not in content]
+        if missing:
+            print(f"Tip: Add {', '.join(missing)} to .gitignore")
     else:
-        print("Tip: Add .reflect/context.md and .reflect/.last_run to .gitignore")
+        print(f"Tip: Add {', '.join(entries_needed)} to .gitignore")
 
     return 0

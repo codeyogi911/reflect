@@ -1,7 +1,8 @@
 # reflect format configuration
-# Sections define what the context briefing contains.
+# Seed categories for the knowledge base.
+# The ingest triage agent can create additional categories dynamically
+# based on what it finds in session evidence.
 # Edit section names and purposes to customize for your project.
-# The subagent fills each section from session evidence + git history.
 
 sections:
   - name: Key Decisions & Rationale
@@ -27,6 +28,16 @@ sections:
       - mistake         # what the agent did wrong
       - consequence     # what broke or had to be reverted
       - rule            # the "don't do X because Y" directive for future agents
+
+  - name: Patterns & Conventions
+    purpose: coding patterns, naming conventions, and style preferences the team follows
+    max_bullets: 10
+    recency: 90d
+
+  - name: Preferences
+    purpose: user and team preferences — tools, libraries, approaches, style choices
+    max_bullets: 10
+    recency: 90d
 
 citations: required
 max_lines: 150

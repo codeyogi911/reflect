@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# reflect SessionStart hook — checks if context.md needs regeneration.
+# reflect SessionStart hook — checks if knowledge base needs updating.
 # Uses .reflect/.last_run to compare against current Entire + git state.
 # Non-blocking: always exits 0.
 
@@ -24,10 +24,10 @@ if [ -f ".reflect/config.yaml" ]; then
   fi
 fi
 
-# Check if context needs regeneration by comparing .last_run state
+# Check if knowledge base needs updating by comparing .last_run state
 NEEDS_UPDATE=false
 
-if [ ! -f ".reflect/.last_run" ] || [ ! -f ".reflect/context.md" ]; then
+if [ ! -f ".reflect/.last_run" ]; then
   NEEDS_UPDATE=true
 else
   # Compare last known git SHA with current HEAD
@@ -47,7 +47,7 @@ else
     fi
   }
   LAST_RUN_TS=$(get_mtime .reflect/.last_run)
-  for f in .reflect/format.yaml .reflect/harness .reflect/config.yaml; do
+  for f in .reflect/format.yaml .reflect/config.yaml; do
     if [ -e "$f" ]; then
       FILE_TS=$(get_mtime "$f")
       if [ "$FILE_TS" -gt "$LAST_RUN_TS" ]; then
@@ -68,26 +68,11 @@ else
 fi
 
 if [ "$NEEDS_UPDATE" = true ]; then
-  # Check if wiki exists — if so, ingest first, then regenerate context
-  HAS_WIKI=false
-  if [ -d ".reflect/wiki" ]; then
-    HAS_WIKI=true
-  fi
-
   if [ "$MODE" = "auto" ]; then
-    if [ "$HAS_WIKI" = true ]; then
-      echo "Reflect: Evidence has changed. Ingesting into wiki and regenerating context."
-      echo "REFLECT_WIKI_INGEST"
-    else
-      echo "Reflect: Evidence has changed. Regenerating context."
-    fi
-    echo "REFLECT_AUTO_RUN"
+    echo "Reflect: New evidence detected. Updating knowledge base."
+    echo "REFLECT_WIKI_INGEST"
   else
-    if [ "$HAS_WIKI" = true ]; then
-      echo "Reflect: Evidence has changed since last ingest. Run /reflect ingest then /reflect to update."
-    else
-      echo "Reflect: Evidence has changed since last context generation. Run /reflect to update."
-    fi
+    echo "Reflect: New evidence detected. Run /reflect ingest to update the knowledge base."
   fi
 fi
 
