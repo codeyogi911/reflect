@@ -13,19 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build tarball
-        run: |
-          VERSION="${GITHUB_REF#refs/tags/}"
-          mkdir -p dist/reflect-cli
-          cp reflect dist/reflect-cli/
-          cp -r lib dist/reflect-cli/
-          cp -r skill dist/reflect-cli/
-          cp -r hooks dist/reflect-cli/
-          cp -r templates dist/reflect-cli/
-          tar -czf "dist/reflect-cli-${VERSION}.tar.gz" -C dist reflect-cli
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Build wheel and sdist
+        run: uv build
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/reflect-cli-*.tar.gz
+          files: dist/*
           generate_release_notes: true

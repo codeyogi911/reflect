@@ -1,34 +1,28 @@
-#!/usr/bin/env python3
-"""reflect — repo-owned memory for AI coding agents.
+"""reflect CLI entry point — argparse dispatch.
 
-Reads raw evidence from Entire CLI and git history on demand.
-Generates context briefings via declarative format.yaml + Claude subagent.
+Invoked via the `reflect` console script (pyproject.toml -> reflect.cli:main)
+or `python -m reflect`.
 """
 
 import argparse
 import sys
-import os
 
-# Add the reflect repo to Python path so lib/ is importable
-# Use realpath to resolve symlinks (install.sh symlinks into ~/.local/bin)
-sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
-
-from lib.init import cmd_init, cmd_upgrade
-from lib.version import __version__
-from lib.context import cmd_context
-from lib.search import cmd_search
-from lib.status import cmd_status
-from lib.improve import cmd_improve
-from lib.sessions import cmd_sessions
-from lib.timeline import cmd_timeline
-from lib.metrics import cmd_metrics
-from lib.ingest import cmd_ingest
-from lib.lint import cmd_lint
+from ._version import __version__
+from .context import cmd_context
+from .improve import cmd_improve
+from .ingest import cmd_ingest
+from .init import cmd_init, cmd_upgrade
+from .lint import cmd_lint
+from .metrics import cmd_metrics
+from .search import cmd_search
+from .sessions import cmd_sessions
+from .status import cmd_status
+from .timeline import cmd_timeline
 
 _R = argparse.RawDescriptionHelpFormatter
 
 
-def main():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="reflect",
         description="Repo-owned memory for AI coding agents.",
@@ -53,8 +47,14 @@ Examples:
   reflect init --migrate      # convert legacy harness to format.yaml
   reflect init --no-wiki      # skip wiki layer initialization""",
     )
-    init_parser.add_argument("--migrate", action="store_true", help="Migrate from legacy harness to format.yaml")
-    init_parser.add_argument("--no-wiki", action="store_true", help="Skip wiki layer initialization")
+    init_parser.add_argument(
+        "--migrate",
+        action="store_true",
+        help="Migrate from legacy harness to format.yaml",
+    )
+    init_parser.add_argument(
+        "--no-wiki", action="store_true", help="Skip wiki layer initialization"
+    )
 
     # reflect upgrade
     subparsers.add_parser(
@@ -78,8 +78,12 @@ Examples:
   reflect context --verbose          # show subagent progress on stderr""",
     )
     ctx.add_argument("--max-lines", type=int, default=None, help="Line budget override")
-    ctx.add_argument("--verbose", action="store_true", help="Show subagent progress on stderr")
-    ctx.add_argument("--raw", action="store_true", help="Bypass wiki, synthesize from raw evidence")
+    ctx.add_argument(
+        "--verbose", action="store_true", help="Show subagent progress on stderr"
+    )
+    ctx.add_argument(
+        "--raw", action="store_true", help="Bypass wiki, synthesize from raw evidence"
+    )
 
     # reflect search
     search = subparsers.add_parser(
@@ -118,7 +122,7 @@ Examples:
     )
 
     # reflect status
-    subparsers.add_parser(
+    status = subparsers.add_parser(
         "status",
         help="Show evidence source availability",
         formatter_class=_R,
@@ -126,7 +130,8 @@ Examples:
 Examples:
   reflect status               # show evidence sources and context freshness
   reflect status --json        # machine-readable JSON output""",
-    ).add_argument("--json", action="store_true", help="Output as JSON")
+    )
+    status.add_argument("--json", action="store_true", help="Output as JSON")
 
     # reflect sessions
     sess = subparsers.add_parser(
@@ -140,8 +145,12 @@ Examples:
   reflect sessions <session_id>            # inspect one session in detail
   reflect sessions <session_id> --json     # session detail as JSON""",
     )
-    sess.add_argument("session_id", nargs="?", default=None, help="Session ID (or prefix) for detail view")
-    sess.add_argument("--limit", type=int, default=15, help="Number of sessions to show (default: 15)")
+    sess.add_argument(
+        "session_id", nargs="?", default=None, help="Session ID (or prefix) for detail view"
+    )
+    sess.add_argument(
+        "--limit", type=int, default=15, help="Number of sessions to show (default: 15)"
+    )
     sess.add_argument("--json", action="store_true", help="Output as JSON")
 
     # reflect timeline
@@ -155,7 +164,9 @@ Examples:
   reflect timeline --days 14        # expand window
   reflect timeline --json           # machine-readable JSON output""",
     )
-    tl.add_argument("--days", type=int, default=7, help="Number of days to show (default: 7)")
+    tl.add_argument(
+        "--days", type=int, default=7, help="Number of days to show (default: 7)"
+    )
     tl.add_argument("--json", action="store_true", help="Output as JSON")
 
     # reflect ingest
@@ -175,8 +186,12 @@ Branch policy:
   the wiki updates won't appear on other branches until merged. Use --force
   to suppress the warning when you intentionally want a branch-local wiki.""",
     )
-    ingest.add_argument("--verbose", action="store_true", help="Show subagent progress on stderr")
-    ingest.add_argument("--force", action="store_true", help="Suppress the non-default-branch warning")
+    ingest.add_argument(
+        "--verbose", action="store_true", help="Show subagent progress on stderr"
+    )
+    ingest.add_argument(
+        "--force", action="store_true", help="Suppress the non-default-branch warning"
+    )
 
     # reflect lint
     lint = subparsers.add_parser(
@@ -189,7 +204,11 @@ Examples:
   reflect lint --fix        # auto-fix resolvable issues
   reflect lint --json       # machine-readable output""",
     )
-    lint.add_argument("--fix", action="store_true", help="Auto-fix resolvable issues (mark resolved, archive)")
+    lint.add_argument(
+        "--fix",
+        action="store_true",
+        help="Auto-fix resolvable issues (mark resolved, archive)",
+    )
     lint.add_argument("--json", action="store_true", help="Output as JSON")
 
     # reflect improve
@@ -231,7 +250,12 @@ Examples:
         help="Allow Entire to generate missing summaries (slow; default off)",
     )
 
-    args = parser.parse_args()
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
 
     if args.command is None:
         parser.print_help()
@@ -251,8 +275,8 @@ Examples:
         "metrics": cmd_metrics,
     }
 
-    return commands[args.command](args)
+    return commands[args.command](args) or 0
 
 
 if __name__ == "__main__":
-    sys.exit(main() or 0)
+    sys.exit(main())
