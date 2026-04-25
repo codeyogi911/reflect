@@ -1,11 +1,9 @@
 """reflect init — one-stop setup: install deps, create .reflect/, wire qmd."""
 
-import os
 import shutil
 import subprocess
 import sys
 from pathlib import Path
-
 
 ENTIRE_INSTALL_URL = "https://entire.io/install.sh"
 QMD_NPM_PACKAGE = "@tobilu/qmd"
@@ -40,14 +38,14 @@ def _install_qmd():
 
     # Try npm first
     if shutil.which("npm"):
-        ok, out = _run(["npm", "install", "-g", QMD_NPM_PACKAGE], timeout=120)
+        ok, _out = _run(["npm", "install", "-g", QMD_NPM_PACKAGE], timeout=120)
         if ok and shutil.which("qmd"):
             print("qmd installed via npm.")
             return True
 
     # Try bun
     if shutil.which("bun"):
-        ok, out = _run(["bun", "install", "-g", QMD_NPM_PACKAGE], timeout=120)
+        ok, _out = _run(["bun", "install", "-g", QMD_NPM_PACKAGE], timeout=120)
         if ok and shutil.which("qmd"):
             print("qmd installed via bun.")
             return True
@@ -69,7 +67,9 @@ def _install_entire():
         # Official install: curl -fsSL https://entire.io/install | sh
         result = subprocess.run(
             ["sh", "-c", f"curl -fsSL {ENTIRE_INSTALL_URL} | bash"],
-            capture_output=True, text=True, timeout=120,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         if result.returncode == 0:
             print("Entire CLI installed.")
@@ -162,8 +162,12 @@ def cmd_init(args):
     if not already_initialized:
         if dry_run:
             print(f"(dry-run) would create directory {reflect_dir}/")
-            print(f"(dry-run) would copy {_template_path('format.yaml')} → {reflect_dir / 'format.yaml'}")
-            print(f"(dry-run) would copy {_template_path('config.yaml')} → {reflect_dir / 'config.yaml'}")
+            print(
+                f"(dry-run) would copy {_template_path('format.yaml')} → {reflect_dir / 'format.yaml'}"
+            )
+            print(
+                f"(dry-run) would copy {_template_path('config.yaml')} → {reflect_dir / 'config.yaml'}"
+            )
         else:
             reflect_dir.mkdir(exist_ok=True)
 
@@ -178,21 +182,26 @@ def cmd_init(args):
                 shutil.copy2(_template_path("config.yaml"), config)
 
     # --- Step 2b: Wiki (always, unless --no-wiki) ---
-    no_wiki = hasattr(args, 'no_wiki') and args.no_wiki
+    no_wiki = hasattr(args, "no_wiki") and args.no_wiki
     wiki = not no_wiki
     wiki_dir = None
     if wiki:
         if dry_run:
-            print(f"(dry-run) would initialize wiki at {reflect_dir / 'wiki'}/ with default category dirs")
+            print(
+                f"(dry-run) would initialize wiki at {reflect_dir / 'wiki'}/ with default category dirs"
+            )
         else:
             from .wiki import init_wiki
+
             fmt = None
             format_file = reflect_dir / "format.yaml"
             if format_file.exists():
                 from .context import load_format
+
                 fmt = load_format(reflect_dir)
             else:
                 from .context import DEFAULT_FORMAT
+
                 fmt = DEFAULT_FORMAT
             wiki_dir = init_wiki(reflect_dir, fmt["sections"])
             print(f"Wiki initialized: {wiki_dir}/")
@@ -203,8 +212,15 @@ def cmd_init(args):
         collection_name = _qmd_collection_name()
         ok, _ = _run(["qmd", "collection", "add", wiki_path, "--name", collection_name])
         if ok:
-            _run(["qmd", "context", "add", f"qmd://{collection_name}",
-                  "Project knowledge base: decisions, patterns, preferences, gotchas, and all knowledge accumulated from coding sessions"])
+            _run(
+                [
+                    "qmd",
+                    "context",
+                    "add",
+                    f"qmd://{collection_name}",
+                    "Project knowledge base: decisions, patterns, preferences, gotchas, and all knowledge accumulated from coding sessions",
+                ]
+            )
             print(f"qmd collection registered: {collection_name}")
         else:
             print(f"qmd: collection {collection_name} already registered")
@@ -212,7 +228,8 @@ def cmd_init(args):
         # Seed embeddings if pages already exist (e.g., re-init on existing wiki)
         has_pages = any(
             f.is_file() and f.suffix == ".md" and f.name not in ("index.md", "log.md")
-            for d in wiki_dir.iterdir() if d.is_dir() and not d.name.startswith("_")
+            for d in wiki_dir.iterdir()
+            if d.is_dir() and not d.name.startswith("_")
             for f in d.iterdir()
         )
         if has_pages:
@@ -225,7 +242,9 @@ def cmd_init(args):
         if ok:
             print("qmd skill installed: .claude/skills/qmd/")
     elif wiki and dry_run:
-        print(f"(dry-run) would register qmd collection {_qmd_collection_name()} and seed embeddings")
+        print(
+            f"(dry-run) would register qmd collection {_qmd_collection_name()} and seed embeddings"
+        )
         print("(dry-run) would install qmd skill: .claude/skills/qmd/")
 
     # --- Step 3: Install skill + hooks ---

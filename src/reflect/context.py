@@ -13,8 +13,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from .evidence import gather_evidence, build_evidence_document, truncate_evidence
-
+from .evidence import build_evidence_document, gather_evidence, truncate_evidence
 
 # ---------------------------------------------------------------------------
 # Format config
@@ -55,11 +54,13 @@ DEFAULT_FORMAT = {
 
 def load_format(reflect_dir):
     """Load .reflect/format.yaml, falling back to defaults."""
+    import copy
+
     format_file = reflect_dir / "format.yaml"
     if not format_file.exists():
-        return DEFAULT_FORMAT.copy()
+        return copy.deepcopy(DEFAULT_FORMAT)
 
-    config = DEFAULT_FORMAT.copy()
+    config = copy.deepcopy(DEFAULT_FORMAT)
     raw = format_file.read_text()
 
     # Parse YAML-lite (no PyYAML dependency)
@@ -206,7 +207,7 @@ OUTPUT FORMAT:
 - Start with: # Project Context
 - Then each section as ## <Section Name>
 - Plain markdown bullets, no nested lists
-- Keep total output under {fmt['max_lines']} lines
+- Keep total output under {fmt["max_lines"]} lines
 - Omit sections that have no relevant evidence
 - Do NOT include commentary, preamble, or meta-discussion
 - Do NOT wrap output in code fences"""
@@ -228,15 +229,23 @@ def _synthesize_context(evidence_doc, fmt, verbose=False):
     prompt = f"Produce the context briefing from this evidence.\n\n{evidence_doc}"
 
     cmd = [
-        "claude", "-p",
-        "--model", MODEL,
-        "--output-format", "json",
-        "--max-turns", "1",
-        "--tools", "",
-        "--max-budget-usd", MAX_BUDGET,
-        "--setting-sources", "",
+        "claude",
+        "-p",
+        "--model",
+        MODEL,
+        "--output-format",
+        "json",
+        "--max-turns",
+        "1",
+        "--tools",
+        "",
+        "--max-budget-usd",
+        MAX_BUDGET,
+        "--setting-sources",
+        "",
         "--no-session-persistence",
-        "--system-prompt", system_prompt,
+        "--system-prompt",
+        system_prompt,
     ]
 
     if verbose:
@@ -244,7 +253,11 @@ def _synthesize_context(evidence_doc, fmt, verbose=False):
 
     try:
         result = subprocess.run(
-            cmd, input=prompt, capture_output=True, text=True, timeout=120,
+            cmd,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
     except (subprocess.TimeoutExpired, OSError) as e:
         if verbose:
@@ -285,6 +298,7 @@ def _synthesize_context(evidence_doc, fmt, verbose=False):
 # Validation
 # ---------------------------------------------------------------------------
 
+
 def _validate_output(context_md, fmt):
     """Validate subagent output. Returns (is_valid, issues)."""
     issues = []
@@ -302,14 +316,13 @@ def _validate_output(context_md, fmt):
             if line.strip().startswith("- "):
                 bullet_count += 1
                 # Check for reference pattern
-                if not re.search(r'\((?:checkpoint|commit|file|session)\s+\S+\)', line):
+                if not re.search(r"\((?:checkpoint|commit|file|session)\s+\S+\)", line):
                     uncited_count += 1
 
         if bullet_count > 0 and uncited_count > bullet_count * 0.3:
             issues.append(f"{uncited_count}/{bullet_count} bullets missing citations")
 
     # Check sections exist
-    section_names = {s["name"].lower() for s in fmt["sections"]}
     found_sections = set()
     for line in lines:
         if line.startswith("## "):
@@ -334,18 +347,20 @@ def _repair_citations(context_md, evidence):
         words = set()
         for field in ["intent", "outcome"]:
             if cp.get(field):
-                words.update(w.lower() for w in re.findall(r'[a-z][a-z0-9_]+', cp[field].lower()))
+                words.update(w.lower() for w in re.findall(r"[a-z][a-z0-9_]+", cp[field].lower()))
         for field in ["learnings", "friction", "open_items"]:
             for item in cp.get(field, []):
-                words.update(w.lower() for w in re.findall(r'[a-z][a-z0-9_]+', item.lower()))
+                words.update(w.lower() for w in re.findall(r"[a-z][a-z0-9_]+", item.lower()))
         for w in words:
             if w not in keyword_map:
                 keyword_map[w] = cp_id
 
     for line in lines:
-        if line.strip().startswith("- ") and not re.search(r'\((?:checkpoint|commit|file|session)\s+\S+\)', line):
+        if line.strip().startswith("- ") and not re.search(
+            r"\((?:checkpoint|commit|file|session)\s+\S+\)", line
+        ):
             # Try to find a matching checkpoint
-            line_words = set(re.findall(r'[a-z][a-z0-9_]+', line.lower()))
+            line_words = set(re.findall(r"[a-z][a-z0-9_]+", line.lower()))
             best_cp = None
             best_overlap = 0
             for cp in evidence.get("checkpoints", []):
@@ -354,7 +369,9 @@ def _repair_citations(context_md, evidence):
                     item for f in ["learnings", "friction", "open_items"] for item in cp.get(f, [])
                 ]:
                     if isinstance(field, str):
-                        cp_words.update(w.lower() for w in re.findall(r'[a-z][a-z0-9_]+', field.lower()))
+                        cp_words.update(
+                            w.lower() for w in re.findall(r"[a-z][a-z0-9_]+", field.lower())
+                        )
                 overlap = len(line_words & cp_words)
                 if overlap > best_overlap:
                     best_overlap = overlap
@@ -370,6 +387,7 @@ def _repair_citations(context_md, evidence):
 # Deterministic fallback
 # ---------------------------------------------------------------------------
 
+
 def _deterministic_context(evidence, fmt):
     """Generate context without LLM — uses parsed checkpoint fields directly.
 
@@ -381,8 +399,10 @@ def _deterministic_context(evidence, fmt):
     checkpoints = evidence.get("checkpoints", [])
     if not checkpoints:
         sections.append("")
-        sections.append("_No session evidence found. Install Entire CLI for session capture, "
-                        "or make some git commits._")
+        sections.append(
+            "_No session evidence found. Install Entire CLI for session capture, "
+            "or make some git commits._"
+        )
         return "\n".join(sections)
 
     for section_def in fmt["sections"]:
@@ -394,7 +414,9 @@ def _deterministic_context(evidence, fmt):
             for cp in checkpoints:
                 if cp.get("intent") and cp.get("outcome") and cp["outcome"] != "(not generated)":
                     cp_id = cp["checkpoint_id"][:12]
-                    bullets.append(f"- {cp['intent'][:120]} → {cp['outcome'][:80]} (checkpoint {cp_id})")
+                    bullets.append(
+                        f"- {cp['intent'][:120]} → {cp['outcome'][:80]} (checkpoint {cp_id})"
+                    )
                 if len(bullets) >= section_def["max_bullets"]:
                     break
 
@@ -449,7 +471,7 @@ def _deterministic_context(evidence, fmt):
         if bullets:
             sections.append("")
             sections.append(f"## {section_def['name']}")
-            sections.extend(bullets[:section_def["max_bullets"]])
+            sections.extend(bullets[: section_def["max_bullets"]])
 
     return "\n".join(sections)
 
@@ -457,6 +479,7 @@ def _deterministic_context(evidence, fmt):
 # ---------------------------------------------------------------------------
 # Wiki-based briefing
 # ---------------------------------------------------------------------------
+
 
 def _briefing_from_wiki(wiki_dir, fmt):
     """Generate context.md from wiki pages (cheap formatting pass, no LLM)."""
@@ -532,6 +555,7 @@ def _briefing_from_wiki(wiki_dir, fmt):
 # Freshness state
 # ---------------------------------------------------------------------------
 
+
 def _write_last_run(reflect_dir, checkpoint_id, git_sha):
     last_run = reflect_dir / ".last_run"
     state = {
@@ -545,6 +569,7 @@ def _write_last_run(reflect_dir, checkpoint_id, git_sha):
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def cmd_context(args):
     """Generate context.md via evidence pipeline + subagent."""
@@ -580,7 +605,7 @@ def cmd_context(args):
 
     # --- Wiki-based briefing (if wiki/ exists and --raw not set) ---
     wiki_dir = reflect_dir / "wiki"
-    use_raw = hasattr(args, 'raw') and args.raw
+    use_raw = hasattr(args, "raw") and args.raw
     if wiki_dir.exists() and not use_raw:
         context_md = _briefing_from_wiki(wiki_dir, fmt)
         if context_md:
@@ -591,7 +616,9 @@ def cmd_context(args):
             )
             if context_md.startswith("# Project Context"):
                 first_newline = context_md.index("\n")
-                context_md = context_md[:first_newline + 1] + header + context_md[first_newline + 1:]
+                context_md = (
+                    context_md[: first_newline + 1] + header + context_md[first_newline + 1 :]
+                )
             else:
                 context_md = "# Project Context\n" + header + context_md
 
@@ -601,6 +628,7 @@ def cmd_context(args):
 
             # Update freshness state so session-start hook doesn't re-trigger
             from .sources import run as _run_cmd
+
             git_sha = _run_cmd(["git", "rev-parse", "--short", "HEAD"]) or ""
             _write_last_run(reflect_dir, "", git_sha)
             return 0
@@ -610,7 +638,9 @@ def cmd_context(args):
     evidence = gather_evidence(auto_generate=auto_generate)
 
     total = evidence["stats"]["total_checkpoints"]
-    print(f"Found {total} checkpoints, {evidence['stats']['total_commits']} commits", file=sys.stderr)
+    print(
+        f"Found {total} checkpoints, {evidence['stats']['total_commits']} commits", file=sys.stderr
+    )
 
     # Build evidence document for subagent
     evidence_doc = build_evidence_document(evidence)
@@ -639,7 +669,7 @@ def cmd_context(args):
         # Insert header after # Project Context if present
         if context_md.startswith("# Project Context"):
             first_newline = context_md.index("\n")
-            context_md = context_md[:first_newline + 1] + header + context_md[first_newline + 1:]
+            context_md = context_md[: first_newline + 1] + header + context_md[first_newline + 1 :]
         else:
             context_md = "# Project Context\n" + header + context_md
 
@@ -656,7 +686,7 @@ def cmd_context(args):
         )
         if context_md.startswith("# Project Context"):
             first_newline = context_md.index("\n")
-            context_md = context_md[:first_newline + 1] + header + context_md[first_newline + 1:]
+            context_md = context_md[: first_newline + 1] + header + context_md[first_newline + 1 :]
 
         source = "deterministic"
 
@@ -673,13 +703,16 @@ def cmd_context(args):
 
 def _run_legacy_harness(harness, args, context_file):
     """Legacy path: run .reflect/harness as subprocess."""
-    print("Using legacy .reflect/harness (migrate to format.yaml with `reflect init --migrate`)", file=sys.stderr)
+    print(
+        "Using legacy .reflect/harness (migrate to format.yaml with `reflect init --migrate`)",
+        file=sys.stderr,
+    )
 
     max_lines = getattr(args, "max_lines", None)
     if not max_lines:
         config_file = Path(".reflect") / "config.yaml"
         if config_file.exists():
-            match = re.search(r'^max_lines:\s*(\d+)', config_file.read_text(), re.MULTILINE)
+            match = re.search(r"^max_lines:\s*(\d+)", config_file.read_text(), re.MULTILINE)
             if match:
                 max_lines = int(match.group(1))
 
@@ -690,10 +723,7 @@ def _run_legacy_harness(harness, args, context_file):
     harness_cmd = [str(harness)] if os.access(harness, os.X_OK) else [sys.executable, str(harness)]
 
     try:
-        result = subprocess.run(
-            harness_cmd + flags,
-            capture_output=True, text=True, timeout=600
-        )
+        result = subprocess.run(harness_cmd + flags, capture_output=True, text=True, timeout=600)
     except subprocess.TimeoutExpired:
         print("Harness timed out after 600 seconds.", file=sys.stderr)
         return 1

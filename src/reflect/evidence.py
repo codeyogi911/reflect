@@ -4,19 +4,15 @@ This is the internal step that feeds both the subagent and deterministic fallbac
 Not user-customizable — the format.yaml controls what gets rendered, not what gets gathered.
 """
 
-import json
 import re
-import shutil
-import subprocess
 from collections import defaultdict
-from datetime import datetime, timedelta
-from pathlib import Path
 
-from .sources import run, has_entire, has_git
+from .sources import has_entire, has_git, run
 
 
-def gather_evidence(max_checkpoints=12, max_commits=20, auto_generate=True,
-                    since_sha=None, since_checkpoint=None):
+def gather_evidence(
+    max_checkpoints=12, max_commits=20, auto_generate=True, since_sha=None, since_checkpoint=None
+):
     """Gather normalized evidence from Entire CLI + git.
 
     Args:
@@ -53,7 +49,16 @@ def gather_evidence(max_checkpoints=12, max_commits=20, auto_generate=True,
             # Verify since_sha exists in the repo
             check = run(["git", "cat-file", "-t", since_sha])
             if check:
-                raw = run(["git", "log", f"{since_sha}..HEAD", f"-{max_commits}", "--format=%H", "--no-merges"])
+                raw = run(
+                    [
+                        "git",
+                        "log",
+                        f"{since_sha}..HEAD",
+                        f"-{max_commits}",
+                        "--format=%H",
+                        "--no-merges",
+                    ]
+                )
             else:
                 # SHA not found (force push, rebase, etc.) — fall back to max_commits
                 raw = run(["git", "log", f"-{max_commits}", "--format=%H", "--no-merges"])
@@ -65,15 +70,25 @@ def gather_evidence(max_checkpoints=12, max_commits=20, auto_generate=True,
 
         # Recent log for context (matching the same range)
         if since_sha and run(["git", "cat-file", "-t", since_sha]):
-            log_raw = run(["git", "log", f"{since_sha}..HEAD", f"-{max_commits}",
-                           "--format=%h %ad %s", "--date=short"])
+            log_raw = run(
+                [
+                    "git",
+                    "log",
+                    f"{since_sha}..HEAD",
+                    f"-{max_commits}",
+                    "--format=%h %ad %s",
+                    "--date=short",
+                ]
+            )
         else:
             log_raw = run(["git", "log", f"-{max_commits}", "--format=%h %ad %s", "--date=short"])
         if log_raw:
             for line in log_raw.split("\n"):
                 parts = line.split(" ", 2)
                 if len(parts) >= 3:
-                    result["git_log"].append({"sha": parts[0], "date": parts[1], "message": parts[2]})
+                    result["git_log"].append(
+                        {"sha": parts[0], "date": parts[1], "message": parts[2]}
+                    )
         result["stats"]["total_commits"] = len(result["git_log"])
 
     # --- Entire CLI evidence ---
@@ -107,8 +122,7 @@ def gather_evidence(max_checkpoints=12, max_commits=20, auto_generate=True,
                     file_counts[f] += 1
                     seen_in_cp.add(f)
         result["stats"]["hot_files"] = {
-            f: count for f, count in sorted(file_counts.items(), key=lambda x: -x[1])
-            if count >= 2
+            f: count for f, count in sorted(file_counts.items(), key=lambda x: -x[1]) if count >= 2
         }
 
     # --- Revert detection ---
@@ -130,7 +144,7 @@ def _detect_reverts(git_log):
         # Match: Revert "original message" or revert: ... or Revert <sha>
         revert_match = re.match(r'^[Rr]evert\s+"?(.+?)"?\s*$', msg)
         if not revert_match:
-            revert_match = re.match(r'^[Rr]evert:?\s+(.+)$', msg)
+            revert_match = re.match(r"^[Rr]evert:?\s+(.+)$", msg)
         if not revert_match:
             continue
 
@@ -146,19 +160,21 @@ def _detect_reverts(git_log):
                 break
 
         # Also try: git log message might contain the sha directly
-        sha_match = re.search(r'\b([a-f0-9]{7,40})\b', reverted_msg)
+        sha_match = re.search(r"\b([a-f0-9]{7,40})\b", reverted_msg)
         if not reverted_sha and sha_match:
             candidate = sha_match.group(1)[:7]
             if candidate in commit_map:
                 reverted_sha = candidate
 
-        reverts.append({
-            "sha": entry["sha"],
-            "date": entry["date"],
-            "message": msg,
-            "reverted_sha": reverted_sha,
-            "reverted_message": reverted_msg,
-        })
+        reverts.append(
+            {
+                "sha": entry["sha"],
+                "date": entry["date"],
+                "message": msg,
+                "reverted_sha": reverted_sha,
+                "reverted_message": reverted_msg,
+            }
+        )
 
     return reverts
 
@@ -176,8 +192,8 @@ def _extract_pitfalls(checkpoints, reverts):
     seen = set()
 
     FAIL_PATTERNS = re.compile(
-        r'(wrong|broke|reverted|had to|shouldn.t|doesn.t work|failed|mistake|'
-        r'wasted|dead.?end|backed out|rolled back|undid|undo|not.work|bug.introduced)',
+        r"(wrong|broke|reverted|had to|shouldn.t|doesn.t work|failed|mistake|"
+        r"wasted|dead.?end|backed out|rolled back|undid|undo|not.work|bug.introduced)",
         re.IGNORECASE,
     )
 
@@ -195,12 +211,14 @@ def _extract_pitfalls(checkpoints, reverts):
                 key = friction[:80].lower()
                 if key not in seen:
                     seen.add(key)
-                    pitfalls.append({
-                        "description": friction,
-                        "evidence_type": "friction",
-                        "source_id": f"checkpoint {cp_id}",
-                        "related_revert": None,
-                    })
+                    pitfalls.append(
+                        {
+                            "description": friction,
+                            "evidence_type": "friction",
+                            "source_id": f"checkpoint {cp_id}",
+                            "related_revert": None,
+                        }
+                    )
 
     # 2. Reverts paired with checkpoint friction
     for rev in reverts:
@@ -217,24 +235,28 @@ def _extract_pitfalls(checkpoints, reverts):
                 key = desc[:80].lower()
                 if key not in seen:
                     seen.add(key)
-                    pitfalls.append({
-                        "description": desc,
-                        "evidence_type": "revert+friction",
-                        "source_id": f"commit {rev['sha']}",
-                        "related_revert": rev["sha"],
-                    })
+                    pitfalls.append(
+                        {
+                            "description": desc,
+                            "evidence_type": "revert+friction",
+                            "source_id": f"commit {rev['sha']}",
+                            "related_revert": rev["sha"],
+                        }
+                    )
                 break
 
         # Even without checkpoint match, a revert is a pitfall signal
         key = rev["message"][:80].lower()
         if key not in seen:
             seen.add(key)
-            pitfalls.append({
-                "description": rev["message"],
-                "evidence_type": "revert",
-                "source_id": f"commit {rev['sha']}",
-                "related_revert": rev["sha"],
-            })
+            pitfalls.append(
+                {
+                    "description": rev["message"],
+                    "evidence_type": "revert",
+                    "source_id": f"commit {rev['sha']}",
+                    "related_revert": rev["sha"],
+                }
+            )
 
     # 3. Learnings that indicate mistakes (weaker signal, but useful)
     for cp in checkpoints:
@@ -244,12 +266,14 @@ def _extract_pitfalls(checkpoints, reverts):
                 key = learning[:80].lower()
                 if key not in seen:
                     seen.add(key)
-                    pitfalls.append({
-                        "description": learning,
-                        "evidence_type": "learning",
-                        "source_id": f"checkpoint {cp_id}",
-                        "related_revert": None,
-                    })
+                    pitfalls.append(
+                        {
+                            "description": learning,
+                            "evidence_type": "learning",
+                            "source_id": f"checkpoint {cp_id}",
+                            "related_revert": None,
+                        }
+                    )
 
     return pitfalls
 
@@ -346,6 +370,7 @@ def truncate_evidence(text, max_chars=20000):
 # Internal: checkpoint fetching with raw text preserved
 # ---------------------------------------------------------------------------
 
+
 def _get_checkpoint_with_raw(commit_sha, generate=True):
     """Get checkpoint data for a commit, preserving raw text for subagent.
 
@@ -428,11 +453,13 @@ def _parse_checkpoint_output(raw):
             while i < len(lines) and lines[i].startswith("  "):
                 commit_match = re.match(r"\s+([a-f0-9]+)\s+(\S+)\s+(.*)", lines[i])
                 if commit_match:
-                    result["commits"].append({
-                        "sha": commit_match.group(1),
-                        "date": commit_match.group(2),
-                        "message": commit_match.group(3).strip(),
-                    })
+                    result["commits"].append(
+                        {
+                            "sha": commit_match.group(1),
+                            "date": commit_match.group(2),
+                            "message": commit_match.group(3).strip(),
+                        }
+                    )
                 i += 1
             continue
 

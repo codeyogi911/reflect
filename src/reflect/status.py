@@ -33,6 +33,7 @@ def _collect_status():
         entire_raw = run(["entire", "status", "--no-pager"])
         entire_status = entire_raw.split("\n")[0].strip() if entire_raw else ""
         from .sources import get_entire_checkpoints
+
         checkpoint_count = len(get_entire_checkpoints())
         data["entire"] = {
             "available": True,
@@ -148,7 +149,9 @@ def cmd_status(args):
 
     lr = data.get("last_run")
     if lr:
-        print(f"**Last run**: checkpoint={lr.get('last_checkpoint', 'none')}, git={lr.get('last_git_sha', 'none')}")
+        print(
+            f"**Last run**: checkpoint={lr.get('last_checkpoint', 'none')}, git={lr.get('last_git_sha', 'none')}"
+        )
 
     stats = data.get("token_usage")
     if stats:
@@ -177,7 +180,7 @@ def _show_token_analytics(stats):
     cache_pct = stats["cache_hit_pct"]
     avg_tokens = stats["avg_tokens_per_session"]
 
-    print(f"\n## Token Usage (last 7 days)\n")
+    print("\n## Token Usage (last 7 days)\n")
     print(f"  Sessions: {session_count}")
     print(f"  Total: {format_tokens(total_tokens)} tokens")
     print(f"  Cache hit rate: {cache_pct}%")
@@ -185,6 +188,6 @@ def _show_token_analytics(stats):
 
     hot = stats.get("hot_areas", [])
     if hot:
-        print(f"\n## Hot Areas (cross-session)\n")
+        print("\n## Hot Areas (cross-session)\n")
         for h in hot:
             print(f"  {h['path']} — {h['count']} of {session_count} sessions")

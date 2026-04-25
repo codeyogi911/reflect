@@ -69,8 +69,13 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 ignore = [
-    "E501",  # line too long (handled by formatter)
-    "B008",  # function calls in default args
+    "E501",   # line too long (handled by formatter)
+    "E741",   # ambiguous variable name (allow `l`, `I`, `O` in this codebase)
+    "B008",   # function calls in default args
+    "SIM105", # try/except/pass — keep explicit
+    "SIM108", # collapse if/else to ternary — keep readable
+    "RUF001", # ambiguous unicode in strings (em-dash is intentional)
+    "RUF003", # ambiguous unicode in comments (em-dash is intentional)
 ]
 
 [tool.ruff.lint.per-file-ignores]

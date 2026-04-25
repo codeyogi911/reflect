@@ -1,11 +1,11 @@
 """reflect metrics — JSON metrics and shields.io endpoint export."""
 
 import json
-import os
 import sys
 from pathlib import Path
 
 from .aggregates import token_window_stats
+from .evidence import gather_evidence
 from .sources import (
     get_entire_checkpoints,
     get_entire_sessions,
@@ -13,7 +13,6 @@ from .sources import (
     has_git,
     run,
 )
-from .evidence import gather_evidence
 
 
 def _count_items(evidence, field):
@@ -157,7 +156,9 @@ def cmd_metrics(args):
         return 1
 
     if getattr(args, "no_json", False) and not getattr(args, "export_dir", None):
-        print("Use --export DIR with --no-json, or omit --no-json for stdout JSON.", file=sys.stderr)
+        print(
+            "Use --export DIR with --no-json, or omit --no-json for stdout JSON.", file=sys.stderr
+        )
         return 1
 
     data, err = collect_metrics(generate_summaries=args.generate_summaries)

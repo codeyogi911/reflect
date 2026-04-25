@@ -5,7 +5,7 @@ import sys
 from datetime import datetime
 
 from .fmt import format_duration, format_tokens, short_id
-from .sources import has_entire, get_entire_sessions, get_session_info
+from .sources import get_entire_sessions, get_session_info, has_entire
 
 
 def _cache_hit_pct(tokens):
@@ -82,9 +82,11 @@ def _show_list(limit, as_json=False):
         status_icon = "*" if r["status"] == "active" else "-"
         sid = short_id(r["session_id"])
         prompt = r["prompt"][:60]
-        print(f"{status_icon} [{sid}] {r['date']}  {r['agent']}  [{r['status']}]  \"{prompt}\"")
-        print(f"  Tokens: {format_tokens(r['tokens']['total'])} (cache: {r['tokens']['cache_hit_pct']}%)  "
-              f"Duration: {r['duration']}  Turns: {r['turns']}  Files: {len(r['files_touched'])}")
+        print(f'{status_icon} [{sid}] {r["date"]}  {r["agent"]}  [{r["status"]}]  "{prompt}"')
+        print(
+            f"  Tokens: {format_tokens(r['tokens']['total'])} (cache: {r['tokens']['cache_hit_pct']}%)  "
+            f"Duration: {r['duration']}  Turns: {r['turns']}  Files: {len(r['files_touched'])}"
+        )
     print()
     return 0
 
@@ -149,7 +151,9 @@ def _show_detail(session_id, as_json=False):
 def cmd_sessions(args):
     """List or inspect sessions tracked by Entire CLI."""
     if not has_entire():
-        print("reflect sessions requires Entire CLI. Install from https://entire.dev", file=sys.stderr)
+        print(
+            "reflect sessions requires Entire CLI. Install from https://entire.dev", file=sys.stderr
+        )
         return 1
 
     session_id = getattr(args, "session_id", None)

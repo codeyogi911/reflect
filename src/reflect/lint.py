@@ -20,20 +20,20 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from .wiki import scan_wiki_index, slugify, read_page, write_page
 from .context import load_format
 from .sources import has_git, run
-
+from .wiki import read_page, scan_wiki_index, slugify, write_page
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _parse_recency(recency_str):
     """Parse a recency string like '30d', '14d', '90d' into a timedelta."""
     if not recency_str:
         return timedelta(days=30)
-    match = re.match(r'(\d+)d', str(recency_str))
+    match = re.match(r"(\d+)d", str(recency_str))
     return timedelta(days=int(match.group(1))) if match else timedelta(days=30)
 
 
@@ -66,20 +66,44 @@ def _title_keywords(title):
     Drops very short (≤2 char) and common stop words.
     """
     STOP = {
-        "a", "an", "the", "and", "or", "in", "on", "of", "to", "for",
-        "is", "are", "was", "were", "be", "been", "with", "from", "at",
-        "by", "as", "it", "its", "that", "this", "not", "no", "do", "did",
+        "a",
+        "an",
+        "the",
+        "and",
+        "or",
+        "in",
+        "on",
+        "of",
+        "to",
+        "for",
+        "is",
+        "are",
+        "was",
+        "were",
+        "be",
+        "been",
+        "with",
+        "from",
+        "at",
+        "by",
+        "as",
+        "it",
+        "its",
+        "that",
+        "this",
+        "not",
+        "no",
+        "do",
+        "did",
     }
-    words = [
-        w for w in re.split(r"[^a-z0-9]+", title.lower())
-        if len(w) > 2 and w not in STOP
-    ]
+    words = [w for w in re.split(r"[^a-z0-9]+", title.lower()) if len(w) > 2 and w not in STOP]
     return words
 
 
 # ---------------------------------------------------------------------------
 # Individual checks
 # ---------------------------------------------------------------------------
+
 
 def _check_stale(pages, fmt):
     """Return issues for pages whose updated date exceeds category recency window."""
@@ -98,28 +122,29 @@ def _check_stale(pages, fmt):
         updated = _parse_date(page.get("updated", ""))
         if updated is None:
             # No updated date — treat as potentially stale with a note
-            issues.append({
-                "type": "stale",
-                "path": page["rel_path"],
-                "detail": f"No updated date (recency window: {recency.days}d)",
-            })
+            issues.append(
+                {
+                    "type": "stale",
+                    "path": page["rel_path"],
+                    "detail": f"No updated date (recency window: {recency.days}d)",
+                }
+            )
             continue
         age = today - updated
         if age > recency:
-            issues.append({
-                "type": "stale",
-                "path": page["rel_path"],
-                "detail": f"Updated {updated} ({age.days}d ago, recency window: {recency.days}d)",
-            })
+            issues.append(
+                {
+                    "type": "stale",
+                    "path": page["rel_path"],
+                    "detail": f"Updated {updated} ({age.days}d ago, recency window: {recency.days}d)",
+                }
+            )
     return issues
 
 
 def _check_orphans(pages):
     """Return issues for pages with no inbound related links from other pages."""
     issues = []
-
-    # Collect all rel_paths and all outbound related links
-    all_rel_paths = {p["rel_path"] for p in pages}
 
     # Build set of pages that are referenced by at least one other page
     referenced = set()
@@ -140,11 +165,13 @@ def _check_orphans(pages):
         rel = page["rel_path"]
         rel_no_ext = rel[:-3] if rel.endswith(".md") else rel
         if rel not in referenced and rel_no_ext not in referenced:
-            issues.append({
-                "type": "orphan",
-                "path": rel,
-                "detail": "No inbound related links from other pages",
-            })
+            issues.append(
+                {
+                    "type": "orphan",
+                    "path": rel,
+                    "detail": "No inbound related links from other pages",
+                }
+            )
     return issues
 
 
@@ -155,10 +182,14 @@ def _check_possibly_resolved(pages):
         return issues
 
     # Fetch last 50 commits' short SHAs + messages
-    git_log = run([
-        "git", "log", "-50",
-        "--format=%h %s",
-    ])
+    git_log = run(
+        [
+            "git",
+            "log",
+            "-50",
+            "--format=%h %s",
+        ]
+    )
     if not git_log:
         return issues
 
@@ -192,12 +223,14 @@ def _check_possibly_resolved(pages):
         if matching_shas:
             sha_list = ", ".join(matching_shas[:5])
             suffix = f" (+{len(matching_shas) - 5} more)" if len(matching_shas) > 5 else ""
-            issues.append({
-                "type": "possibly-resolved",
-                "path": page["rel_path"],
-                "detail": f"Keywords found in recent commits: {sha_list}{suffix}",
-                "_matching_shas": matching_shas,  # kept for --fix use
-            })
+            issues.append(
+                {
+                    "type": "possibly-resolved",
+                    "path": page["rel_path"],
+                    "detail": f"Keywords found in recent commits: {sha_list}{suffix}",
+                    "_matching_shas": matching_shas,  # kept for --fix use
+                }
+            )
     return issues
 
 
@@ -214,11 +247,13 @@ def _check_coverage_gaps(pages, fmt):
         slug = slugify(section.get("name", ""))
         count = counts.get(slug, 0)
         if count < 2:
-            issues.append({
-                "type": "coverage-gap",
-                "category": slug,
-                "detail": f"Only {count} page{'s' if count != 1 else ''} (min recommended: 2)",
-            })
+            issues.append(
+                {
+                    "type": "coverage-gap",
+                    "category": slug,
+                    "detail": f"Only {count} page{'s' if count != 1 else ''} (min recommended: 2)",
+                }
+            )
     return issues
 
 
@@ -233,7 +268,7 @@ def _check_near_duplicates(pages):
         cat = page["category"]
         by_cat.setdefault(cat, []).append(page)
 
-    for cat, cat_pages in by_cat.items():
+    for _cat, cat_pages in by_cat.items():
         n = len(cat_pages)
         for i in range(n):
             for j in range(i + 1, n):
@@ -241,17 +276,20 @@ def _check_near_duplicates(pages):
                 b = cat_pages[j]
                 score = _title_similarity(a["title"], b["title"])
                 if score > THRESHOLD:
-                    issues.append({
-                        "type": "near-duplicate",
-                        "paths": [a["rel_path"], b["rel_path"]],
-                        "detail": f"{int(score * 100)}% title overlap",
-                    })
+                    issues.append(
+                        {
+                            "type": "near-duplicate",
+                            "paths": [a["rel_path"], b["rel_path"]],
+                            "detail": f"{int(score * 100)}% title overlap",
+                        }
+                    )
     return issues
 
 
 # ---------------------------------------------------------------------------
 # --fix actions
 # ---------------------------------------------------------------------------
+
 
 def _fix_resolved_pages(possibly_resolved_issues, wiki_dir):
     """Mark possibly-resolved open-work pages as status: resolved."""
@@ -303,6 +341,7 @@ def _fix_archive_superseded(pages, wiki_dir):
 # ---------------------------------------------------------------------------
 # Output formatting
 # ---------------------------------------------------------------------------
+
 
 def _print_report(issues, fix_log):
     """Print human-readable wiki health report."""
@@ -384,6 +423,7 @@ def _issues_for_json(issues):
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
+
 
 def cmd_lint(args):
     """Check wiki health and report issues."""

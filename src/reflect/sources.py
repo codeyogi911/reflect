@@ -6,7 +6,6 @@ import re
 import shlex
 import shutil
 import subprocess
-from pathlib import Path
 
 
 def run(cmd, timeout=30):
@@ -17,9 +16,7 @@ def run(cmd, timeout=30):
     if isinstance(cmd, str):
         cmd = shlex.split(cmd)
     try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         return result.stdout.strip() if result.returncode == 0 else ""
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return ""
@@ -63,12 +60,14 @@ def get_entire_checkpoints():
                     commits.append({"sha": sha, "message": msg})
                     dates.append(date_str)
                 i += 1
-            checkpoints.append({
-                "id": cp_id,
-                "intent": intent[:200],
-                "date": dates[0] if dates else "",
-                "commits": commits,
-            })
+            checkpoints.append(
+                {
+                    "id": cp_id,
+                    "intent": intent[:200],
+                    "date": dates[0] if dates else "",
+                    "commits": commits,
+                }
+            )
         else:
             i += 1
     return checkpoints
@@ -97,9 +96,7 @@ def get_entire_sessions():
     while i < len(lines):
         line = lines[i]
         # Match: "Claude Code · project · session <uuid>"
-        match = re.match(
-            r'^(.+?)\s+·\s+(.+?)\s+·\s+session\s+([a-f0-9-]+)', line
-        )
+        match = re.match(r"^(.+?)\s+·\s+(.+?)\s+·\s+session\s+([a-f0-9-]+)", line)
         if match:
             agent = match.group(1).strip()
             project = match.group(2).strip()
@@ -107,7 +104,7 @@ def get_entire_sessions():
             prompt_snippet = ""
             status_line = ""
             # Next line: > "prompt..."
-            if i + 1 < len(lines) and lines[i + 1].strip().startswith('>'):
+            if i + 1 < len(lines) and lines[i + 1].strip().startswith(">"):
                 prompt_snippet = lines[i + 1].strip().lstrip('> "').rstrip('"')
                 i += 1
             # Next line: status info
@@ -115,14 +112,16 @@ def get_entire_sessions():
                 status_line = lines[i + 1].strip()
                 i += 1
             status = "active" if "active" in status_line.split("·")[0] else "ended"
-            sessions.append({
-                "session_id": session_id,
-                "agent": agent,
-                "project": project,
-                "status": status,
-                "status_line": status_line,
-                "prompt_snippet": prompt_snippet,
-            })
+            sessions.append(
+                {
+                    "session_id": session_id,
+                    "agent": agent,
+                    "project": project,
+                    "status": status,
+                    "status_line": status_line,
+                    "prompt_snippet": prompt_snippet,
+                }
+            )
         i += 1
     return sessions
 
@@ -165,7 +164,6 @@ def get_checkpoint_for_commit(sha):
     # Parse the output: first line has "Checkpoint: <id>"
     cp_id = None
     intent = ""
-    commits = []
     for line in raw.split("\n"):
         if line.startswith("Checkpoint:"):
             cp_id = line.split(":", 1)[1].strip()

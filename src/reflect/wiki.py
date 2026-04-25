@@ -11,7 +11,6 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-
 # ---------------------------------------------------------------------------
 # Slugify
 # ---------------------------------------------------------------------------
@@ -35,7 +34,7 @@ def slugify(name):
     # Drop common leading adjectives
     for prefix in ("key ", "critical ", "important "):
         if low.startswith(prefix):
-            low = low[len(prefix):]
+            low = low[len(prefix) :]
 
     # Drop anything after &, —, or –
     for sep in (" & ", " — ", " – ", " - "):
@@ -51,6 +50,7 @@ def slugify(name):
 # Frontmatter parsing / writing
 # ---------------------------------------------------------------------------
 
+
 def parse_frontmatter(text):
     """Parse YAML frontmatter from markdown text.
 
@@ -65,7 +65,7 @@ def parse_frontmatter(text):
         return {}, text
 
     raw_fm = text[4:end]  # skip opening ---\n
-    body = text[end + 4:].lstrip("\n")  # skip closing ---\n
+    body = text[end + 4 :].lstrip("\n")  # skip closing ---\n
 
     fm = {}
     current_key = None
@@ -155,6 +155,7 @@ def render_frontmatter(fm):
 # Page I/O
 # ---------------------------------------------------------------------------
 
+
 def read_page(page_path):
     """Read a wiki page.  Returns (frontmatter_dict, body_text)."""
     text = Path(page_path).read_text()
@@ -172,6 +173,7 @@ def write_page(page_path, fm, body):
 # ---------------------------------------------------------------------------
 # Wiki index (runtime scan of frontmatter)
 # ---------------------------------------------------------------------------
+
 
 def scan_wiki_index(wiki_dir):
     """Scan all wiki pages and return a list of page metadata dicts.
@@ -219,20 +221,22 @@ def scan_wiki_index(wiki_dir):
                 summary = stripped[:150]
                 break
 
-        pages.append({
-            "path": str(md_file),
-            "rel_path": str(rel),
-            "category": category,
-            "filename": md_file.stem,
-            "title": title,
-            "status": fm.get("status", "active"),
-            "tags": fm.get("tags", []),
-            "updated": fm.get("updated", ""),
-            "created": fm.get("created", ""),
-            "sources": fm.get("sources", []),
-            "related": fm.get("related", []),
-            "summary": summary,
-        })
+        pages.append(
+            {
+                "path": str(md_file),
+                "rel_path": str(rel),
+                "category": category,
+                "filename": md_file.stem,
+                "title": title,
+                "status": fm.get("status", "active"),
+                "tags": fm.get("tags", []),
+                "updated": fm.get("updated", ""),
+                "created": fm.get("created", ""),
+                "sources": fm.get("sources", []),
+                "related": fm.get("related", []),
+                "summary": summary,
+            }
+        )
 
     return pages
 
@@ -258,6 +262,7 @@ def build_index_summary(wiki_dir):
 # ---------------------------------------------------------------------------
 # Wiki directory setup
 # ---------------------------------------------------------------------------
+
 
 def init_wiki(reflect_dir, fmt_sections):
     """Create wiki/ directory structure from format.yaml sections.
@@ -295,6 +300,7 @@ def append_log(wiki_dir, entry_lines):
 # ---------------------------------------------------------------------------
 # index.md — committed table of contents
 # ---------------------------------------------------------------------------
+
 
 def update_index_md(wiki_dir):
     """Regenerate index.md from current wiki pages.

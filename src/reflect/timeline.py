@@ -5,14 +5,16 @@ import sys
 from collections import defaultdict
 from datetime import datetime, timedelta
 
-from .fmt import format_duration, format_tokens, format_time, short_id
-from .sources import has_entire, get_entire_sessions, get_session_info, get_rewind_points
+from .fmt import format_duration, format_time, format_tokens, short_id
+from .sources import get_entire_sessions, get_rewind_points, get_session_info, has_entire
 
 
 def cmd_timeline(args):
     """Show date-grouped timeline of sessions and checkpoints."""
     if not has_entire():
-        print("reflect timeline requires Entire CLI. Install from https://entire.dev", file=sys.stderr)
+        print(
+            "reflect timeline requires Entire CLI. Install from https://entire.dev", file=sys.stderr
+        )
         return 1
 
     days = getattr(args, "days", 7)
@@ -89,9 +91,8 @@ def cmd_timeline(args):
             prompt = e.get("prompt", "")[:55]
             sid = short_id(e["session_id"])
 
-            print(f"  [{sid}] {start_time}{end_time}  {e['agent']}  \"{prompt}\"")
-            print(f"    {tok_str} tokens · {duration} · "
-                  f"{e['turns']} turns · {len(files)} files")
+            print(f'  [{sid}] {start_time}{end_time}  {e["agent"]}  "{prompt}"')
+            print(f"    {tok_str} tokens · {duration} · {e['turns']} turns · {len(files)} files")
 
             for cp in e.get("checkpoints", []):
                 cp_id = short_id(cp.get("id", cp.get("checkpoint_id", "")))

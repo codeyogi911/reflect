@@ -89,12 +89,8 @@ Examples:
   reflect context --verbose          # show subagent progress on stderr""",
     )
     ctx.add_argument("--max-lines", type=int, default=None, help="Line budget override")
-    ctx.add_argument(
-        "--verbose", action="store_true", help="Show subagent progress on stderr"
-    )
-    ctx.add_argument(
-        "--raw", action="store_true", help="Bypass wiki, synthesize from raw evidence"
-    )
+    ctx.add_argument("--verbose", action="store_true", help="Show subagent progress on stderr")
+    ctx.add_argument("--raw", action="store_true", help="Bypass wiki, synthesize from raw evidence")
 
     # reflect search
     search = subparsers.add_parser(
@@ -175,9 +171,7 @@ Examples:
   reflect timeline --days 14        # expand window
   reflect timeline --json           # machine-readable JSON output""",
     )
-    tl.add_argument(
-        "--days", type=int, default=7, help="Number of days to show (default: 7)"
-    )
+    tl.add_argument("--days", type=int, default=7, help="Number of days to show (default: 7)")
     tl.add_argument("--json", action="store_true", help="Output as JSON")
 
     # reflect ingest
@@ -198,9 +192,7 @@ Branch policy:
   the wiki updates won't appear on other branches until merged. Use --force
   to suppress the warning when you intentionally want a branch-local wiki.""",
     )
-    ingest.add_argument(
-        "--verbose", action="store_true", help="Show subagent progress on stderr"
-    )
+    ingest.add_argument("--verbose", action="store_true", help="Show subagent progress on stderr")
     ingest.add_argument(
         "--force", action="store_true", help="Suppress the non-default-branch warning"
     )
