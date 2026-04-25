@@ -7,6 +7,20 @@ __pycache__/
 *.pyc
 bench/results/tmp-*
 
+# Python build / dev artifacts
+build/
+dist/
+*.egg-info/
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# mkdocs build output
+site/
+
 # Tool-managed artifacts (installed by `reflect init` via their own tools)
 .agents/
 .claude/skills/qmd
