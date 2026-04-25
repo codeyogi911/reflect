@@ -18,8 +18,22 @@
 
 ## Quick Start
 
+Install the CLI with [uv](https://docs.astral.sh/uv/) (recommended):
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/codeyogi911/reflect/main/install.sh | bash
+uv tool install reflect-cli
+```
+
+Or run ad-hoc without installing:
+
+```bash
+uvx reflect --help
+```
+
+Or via pip:
+
+```bash
+pip install reflect-cli
 ```
 
 Then in any git repo:
@@ -250,7 +264,18 @@ Default max budget is $0.05 per context generation (Claude Haiku), though typica
 
 ## Contributing
 
-PRs welcome. For development, symlink `reflect` to the repo script (or run `python3 reflect …` directly) so `lib/` edits take effect without reinstalling the release tarball.
+PRs welcome. For development:
+
+```bash
+git clone https://github.com/codeyogi911/reflect
+cd reflect
+uv sync --all-extras    # editable install + dev + docs deps
+uv run reflect status   # run the CLI
+uv run pytest           # run tests
+uv run ruff check       # lint
+```
+
+Edits under `src/reflect/` take effect immediately via the editable install.
 
 ## License
 

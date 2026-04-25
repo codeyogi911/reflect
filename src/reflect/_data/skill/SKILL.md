@@ -34,6 +34,23 @@ qmd for hybrid search (BM25 + vector + reranking).
 via qmd. When you need project context — past decisions, preferences, patterns,
 gotchas — search qmd directly.
 
+## When to use this skill
+
+- The user asks "why" about a past decision, convention, or piece of code.
+- You're about to make an architectural choice and want prior context.
+- The user mentions onboarding, retrospectives, or "what did we try before".
+- You hit unfamiliar code, infra, or tooling and want recorded context.
+- The user explicitly invokes `/reflect <subcommand>`.
+- The SessionStart hook output contains `REFLECT_WIKI_INGEST` (run `reflect ingest`).
+
+## When NOT to use this skill
+
+- Real-time code navigation — use Grep/Read directly.
+- Questions answerable from the live codebase alone (file structure, current implementation).
+- Anything where the user has already provided sufficient context.
+- Trivial typos, single-file edits, formatting changes.
+- When `.reflect/` does not exist in the repo (suggest `reflect init` instead).
+
 Parse $ARGUMENTS to determine which command to run:
 
 1. `ingest` → go to **Command: Ingest**
@@ -133,6 +150,7 @@ When invoked with no arguments or just `/reflect`:
 
 ```bash
 reflect ingest                      # process new sessions/commits into wiki
+reflect ingest --dry-run            # show planned writes without touching disk
 reflect ingest --verbose            # show triage + write subagent progress
 reflect ingest --force              # suppress non-default-branch warning
 ```
@@ -146,6 +164,25 @@ Ingests new evidence into the wiki via a two-step subagent pipeline:
 3. **Index**: Updates index.md and re-indexes the qmd collection.
 
 Report the result: how many pages were created, updated, or resolved.
+
+### When to use
+
+- The SessionStart hook printed `REFLECT_WIKI_INGEST`.
+- After merging a feature branch into the default branch.
+- Periodically (e.g., end of week) to keep the wiki current.
+
+### When NOT to use
+
+- Mid-feature on a feature branch (use `--force` only if you want a branch-local wiki).
+- When `.reflect/` does not exist (`reflect init` first).
+- When the user is asking a question — search the wiki instead.
+
+### Common failures
+
+- **"Not on default branch"**: by design. Merge to `main` first, or pass `--force`.
+- **Triage subagent timeout**: re-run; partial progress is preserved via `.last_run`.
+- **qmd re-index fails**: check `qmd status -c reflect-<repo>`; the wiki write
+  still succeeded, only the search index is stale.
 
 ### Branch Policy (Important)
 
@@ -186,6 +223,23 @@ Checks wiki health:
 `--fix` auto-resolves open-work and archives superseded pages. Returns non-zero
 exit code when issues are found.
 
+### When to use
+
+- Periodic wiki audits (weekly/monthly).
+- Before a major refactor — see what knowledge might be obsolete.
+- After running `reflect ingest` to validate the new pages.
+
+### When NOT to use
+
+- Before `reflect init` (no wiki to lint).
+- As part of CI on every commit — runs once per push is enough.
+
+### Common failures
+
+- **Non-zero exit when issues exist**: this is intentional. Use `--fix` or
+  `--json | jq '.issues'` to triage; pipe through `|| true` if calling from
+  scripts that shouldn't fail.
+
 ---
 
 ## Command: Search
@@ -204,6 +258,21 @@ For richer semantic search, use qmd directly:
 qmd query "<natural language question>" -c reflect-<repo-name>
 ```
 
+### When to use
+
+- Quick keyword grep across wiki + Entire transcripts + git log in one shot.
+- When you don't know which evidence source has the answer.
+
+### When NOT to use
+
+- For natural-language "why" questions — use `qmd query` (semantic).
+- For path-only output to feed another tool — use `qmd query --files`.
+
+### Common failures
+
+- **No results across any source**: the term may live in commit bodies — try
+  `git log --all --grep "<term>"` directly.
+
 ---
 
 ## Command: Status
@@ -212,6 +281,16 @@ qmd query "<natural language question>" -c reflect-<repo-name>
 
 Shows evidence source availability, wiki page count, qmd collection status,
 and freshness state.
+
+### When to use
+
+- First action when entering a new repo with reflect installed.
+- When the SessionStart hook printed nothing and you want to confirm freshness.
+- Before suggesting `reflect ingest` to verify there's actually new evidence.
+
+### When NOT to use
+
+- As a substitute for `reflect search` — status doesn't surface content.
 
 ---
 
@@ -225,6 +304,15 @@ reflect sessions --limit 30         # show more
 reflect sessions <session_id>       # inspect one session
 ```
 
+### When to use
+
+- "What did session N discuss?" / drilling into a specific past conversation.
+- Cross-referencing a checkpoint hash to its session of origin.
+
+### When NOT to use
+
+- Searching by keyword — use `reflect search` or `qmd query`.
+
 ---
 
 ## Command: Timeline
@@ -236,6 +324,15 @@ reflect timeline                    # last 7 days
 reflect timeline --days 14          # expand window
 ```
 
+### When to use
+
+- "Show me what happened this week."
+- Auditing activity bursts vs quiet periods.
+
+### When NOT to use
+
+- For deep introspection of a single session — use `reflect sessions <id>`.
+
 ---
 
 ## Command: Improve
@@ -244,6 +341,15 @@ reflect timeline --days 14          # expand window
 
 Analyzes the knowledge base quality and proposes format.yaml changes.
 
+### When to use
+
+- The wiki feels noisy or sparse and you want config suggestions.
+- After a few weeks of `reflect ingest` runs, to tune categories.
+
+### When NOT to use
+
+- Before any sessions have been ingested (nothing to analyze).
+
 ---
 
 ## Command: Metrics
@@ -251,6 +357,15 @@ Analyzes the knowledge base quality and proposes format.yaml changes.
 **Usage**: `/reflect metrics`
 
 Outputs quantitative health of the knowledge base.
+
+### When to use
+
+- Generating shields.io badges for the README (`--export badges/`).
+- Weekly status updates — page counts, ingest cadence, etc.
+
+### When NOT to use
+
+- Replacement for `reflect status` (metrics are aggregate, status is current).
 
 ---
 
@@ -262,6 +377,22 @@ reflect init --no-wiki      # skip wiki layer
 reflect init --migrate      # migrate from legacy harness
 reflect upgrade             # update templates and agents to latest
 ```
+
+### When to use
+
+- First time setting up reflect in a repo (`init`).
+- After upgrading the `reflect-cli` package and you want refreshed templates (`upgrade`).
+
+### When NOT to use
+
+- `init` in a repo that already has `.reflect/` — use `upgrade` to refresh templates instead.
+- Never run `init` on a non-git directory; reflect needs git history.
+
+### Common failures
+
+- **qmd install fails**: `npm` may not be on PATH. Install qmd manually:
+  `npm install -g @qubicfox/qmd-cli`.
+- **Entire CLI install fails**: not fatal — reflect works in git-only mode.
 
 ---
 
@@ -297,5 +428,5 @@ Spawn Keeper when:
 - NEVER include secrets, API keys, or credentials in output
 - **Pitfall entries are blocking**: if a past mistake is relevant to your
   current work, investigate before proceeding
-- `skill/SKILL.md` is the source of truth; `.claude/skills/reflect/SKILL.md`
-  is a copy installed by `reflect init`
+- `src/reflect/_data/skill/SKILL.md` is the source of truth (in the reflect
+  repo); `.claude/skills/reflect/SKILL.md` is the copy installed by `reflect init`.

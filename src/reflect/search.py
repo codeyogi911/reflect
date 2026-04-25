@@ -6,8 +6,8 @@ import shutil
 import sys
 from pathlib import Path
 
-from .sources import has_entire, has_git, get_entire_checkpoints, run
-from .wiki import scan_wiki_index, read_page
+from .sources import get_entire_checkpoints, has_entire, has_git, run
+from .wiki import read_page, scan_wiki_index
 
 
 def _search_tokens(query, phrase):
@@ -40,10 +40,14 @@ def _qmd_collection_name():
 def _search_qmd(query, limit):
     """Search wiki via qmd hybrid search (BM25 + vector + reranking)."""
     cmd = [
-        "qmd", "query", query,
-        "-c", _qmd_collection_name(),
+        "qmd",
+        "query",
+        query,
+        "-c",
+        _qmd_collection_name(),
         "--json",
-        "-n", str(limit),
+        "-n",
+        str(limit),
     ]
     raw = run(cmd, timeout=60)
     if not raw:
@@ -79,14 +83,16 @@ def _search_wiki_text(tokens, wiki_dir, limit):
             score = 0
 
         if score > 0:
-            matches.append({
-                "rel_path": page["rel_path"],
-                "title": page["title"],
-                "summary": page["summary"],
-                "category": page["category"],
-                "tags": page["tags"],
-                "match_score": score,
-            })
+            matches.append(
+                {
+                    "rel_path": page["rel_path"],
+                    "title": page["title"],
+                    "summary": page["summary"],
+                    "category": page["category"],
+                    "tags": page["tags"],
+                    "match_score": score,
+                }
+            )
 
     matches.sort(key=lambda m: m["match_score"], reverse=True)
     return matches[:limit]
@@ -160,14 +166,16 @@ def cmd_search(args):
                 normalized_wiki.append(m)
             else:
                 # qmd shape → normalize
-                normalized_wiki.append({
-                    "rel_path": m.get("path", ""),
-                    "title": "",
-                    "summary": m.get("snippet", ""),
-                    "category": "",
-                    "tags": [],
-                    "match_score": m.get("score", 0),
-                })
+                normalized_wiki.append(
+                    {
+                        "rel_path": m.get("path", ""),
+                        "title": "",
+                        "summary": m.get("snippet", ""),
+                        "category": "",
+                        "tags": [],
+                        "match_score": m.get("score", 0),
+                    }
+                )
 
         result = {
             "query": query,
@@ -197,7 +205,9 @@ def cmd_search(args):
             # text result shape: {"rel_path": ..., "title": ..., "summary": ..., "tags": ...}
             if "rel_path" in m:
                 tags = m.get("tags", [])
-                tags_str = (", ".join(tags) if isinstance(tags, list) else str(tags)) if tags else ""
+                tags_str = (
+                    (", ".join(tags) if isinstance(tags, list) else str(tags)) if tags else ""
+                )
                 summary = m.get("summary", "")
                 print(f"- [{m['rel_path']}] {summary}")
                 if tags_str:
@@ -237,8 +247,7 @@ def cmd_search(args):
             print(f"No matches for {tokens[0]!r}.")
         else:
             print(
-                f"No matches (OR across {len(tokens)} terms: "
-                f"{', '.join(repr(t) for t in tokens)})."
+                f"No matches (OR across {len(tokens)} terms: {', '.join(repr(t) for t in tokens)})."
             )
         return 0
 

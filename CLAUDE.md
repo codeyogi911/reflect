@@ -8,33 +8,42 @@ Persistent, compounding knowledge base for any repository. Reads raw evidence fr
 
 ## Structure
 
-- `reflect` — CLI entry point (Python)
-- `lib/` — CLI modules (evidence, context, init, search, status, sessions, timeline, improve, metrics, ingest, lint, wiki)
-- `lib/evidence.py` — fixed evidence gathering pipeline (Entire CLI + git)
-- `lib/wiki.py` — wiki layer utilities (frontmatter, page I/O, index scanning, index.md)
-- `lib/ingest.py` — two-step wiki ingest (triage → write) + qmd re-indexing
-- `lib/lint.py` — wiki health checks (stale, orphan, duplicate, coverage, resolved)
-- `skill/SKILL.md` — skill source (dev copy; install copies to `.claude/skills/reflect/`)
+- `pyproject.toml` — package metadata, console script entry point (`reflect = reflect.cli:main`)
+- `src/reflect/` — Python package (installed as `reflect-cli`)
+  - `cli.py` — argparse dispatch, entry point
+  - `__main__.py` — enables `python -m reflect`
+  - `_version.py` — single source of truth for `__version__`
+  - `evidence.py` — fixed evidence gathering pipeline (Entire CLI + git)
+  - `wiki.py` — wiki layer utilities (frontmatter, page I/O, index scanning, index.md)
+  - `ingest.py` — two-step wiki ingest (triage → write) + qmd re-indexing
+  - `lint.py` — wiki health checks (stale, orphan, duplicate, coverage, resolved)
+  - `context.py`, `init.py`, `search.py`, `status.py`, `sessions.py`, `timeline.py`, `improve.py`, `metrics.py` — subcommand implementations
+  - `sources.py`, `fmt.py`, `aggregates.py` — shared helpers
+  - `_data/` — package runtime data (copied into target repos on `reflect init`)
+    - `_data/templates/` — `format.yaml` and `config.yaml` templates
+    - `_data/skill/SKILL.md` — Claude Code skill source
+    - `_data/skill/agents/keeper.md` — keeper subagent definition
+    - `_data/hooks/session-start.sh` — SessionStart hook for knowledge base freshness
 - `SPEC.md` — specification for `.reflect/` directory format
-- `hooks/session-start.sh` — SessionStart hook for knowledge base freshness
-- `install.sh` — installer (symlinks CLI to `~/.local/bin`)
 - `README.md` — user-facing docs
 - `ROADMAP.md` — future phases
 - `CLAUDE.md` — this file
 
 ## Development
 
-- Edit `lib/evidence.py` to change evidence gathering
-- Edit `lib/context.py` to change synthesis pipeline, system prompt, or validation
-- Edit `lib/wiki.py` to change wiki utilities (frontmatter, page format, index.md)
-- Edit `lib/ingest.py` to change knowledge extraction (triage/write subagent prompts)
-- Edit `lib/lint.py` to change wiki health checks
-- Edit `lib/` to change CLI commands
-- Edit `.reflect/format.yaml` (in any repo) to customize seed categories
-- Edit `skill/SKILL.md` to change the Claude Code skill (source of truth)
-- Test locally: `python3 reflect status` or `python3 reflect search <query>`
-- Test wiki: `python3 reflect init && python3 reflect ingest --verbose && python3 reflect lint`
-- Install CLI via `./install.sh`; the skill is project-local under `.claude/skills/reflect/`
+- Install for development: `uv sync --all-extras` (creates editable install + dev + docs deps)
+- Run the CLI: `uv run reflect <subcommand>` or activate the venv and use `reflect` directly
+- Edit `src/reflect/evidence.py` to change evidence gathering
+- Edit `src/reflect/context.py` to change synthesis pipeline, system prompt, or validation
+- Edit `src/reflect/wiki.py` to change wiki utilities (frontmatter, page format, index.md)
+- Edit `src/reflect/ingest.py` to change knowledge extraction (triage/write subagent prompts)
+- Edit `src/reflect/lint.py` to change wiki health checks
+- Edit `src/reflect/cli.py` to change CLI surface (flags, subcommand wiring)
+- Edit `src/reflect/_data/templates/format.yaml` to change the default user-facing schema
+- Edit `src/reflect/_data/skill/SKILL.md` to change the Claude Code skill (source of truth)
+- Test locally: `uv run reflect status`
+- Test wiki: `uv run reflect init && uv run reflect ingest --verbose && uv run reflect lint`
+- Smoke test: `bash scripts/smoke.sh`
 
 ## Session Insights
 

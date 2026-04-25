@@ -16,18 +16,17 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
-from lib.evidence import gather_evidence, build_evidence_document, truncate_evidence
-from lib.context import load_format
-from lib.wiki import (
-    slugify,
-    build_index_summary,
-    read_page,
-    write_page,
-    parse_frontmatter,
+from .context import load_format
+from .evidence import build_evidence_document, gather_evidence, truncate_evidence
+from .wiki import (
     append_log,
+    build_index_summary,
+    parse_frontmatter,
+    read_page,
+    slugify,
     update_index_md,
+    write_page,
 )
-
 
 # ---------------------------------------------------------------------------
 # Model / budget config
@@ -40,6 +39,7 @@ INGEST_BUDGET = os.environ.get("REFLECT_INGEST_BUDGET", "0.10")
 # ---------------------------------------------------------------------------
 # Freshness state (duplicated from context.py to avoid circular imports)
 # ---------------------------------------------------------------------------
+
 
 def _write_last_run(reflect_dir, checkpoint_id, git_sha):
     last_run = reflect_dir / ".last_run"
@@ -55,6 +55,7 @@ def _write_last_run(reflect_dir, checkpoint_id, git_sha):
 # qmd helpers
 # ---------------------------------------------------------------------------
 
+
 def _qmd_collection_name():
     """Derive a unique qmd collection name from the repo directory name."""
     return f"reflect-{Path.cwd().name}"
@@ -64,12 +65,15 @@ def _qmd_collection_name():
 # Branch helpers (Strategy A: wiki belongs on the default branch)
 # ---------------------------------------------------------------------------
 
+
 def _get_current_branch():
     """Return the current git branch name, or None if not in a git repo."""
     try:
         result = subprocess.run(
             ["git", "branch", "--show-current"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode == 0:
             return result.stdout.strip() or None
@@ -88,7 +92,9 @@ def _get_default_branch():
     try:
         result = subprocess.run(
             ["git", "symbolic-ref", "refs/remotes/origin/HEAD"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode == 0 and result.stdout.strip():
             # e.g. "refs/remotes/origin/main" → "main"
@@ -101,7 +107,9 @@ def _get_default_branch():
         try:
             result = subprocess.run(
                 ["git", "rev-parse", "--verify", branch],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
             if result.returncode == 0:
                 return branch
@@ -124,7 +132,10 @@ def _qmd_reindex(verbose=False):
     try:
         subprocess.run(
             ["qmd", "update", "-c", collection],
-            capture_output=True, text=True, timeout=60, check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
         print(f"  [ingest] qmd update failed: {e}", file=sys.stderr)
@@ -136,7 +147,8 @@ def _qmd_reindex(verbose=False):
     try:
         result = subprocess.run(
             ["qmd", "embed", "-c", collection],
-            stdout=sys.stderr, stderr=sys.stderr,
+            stdout=sys.stderr,
+            stderr=sys.stderr,
             timeout=900,  # 15 min — generous for CPU embedding
             check=False,
         )
@@ -151,8 +163,8 @@ def _qmd_reindex(verbose=False):
             )
     except subprocess.TimeoutExpired:
         print(
-            f"  [ingest] qmd embed timed out after 15 minutes. "
-            f"If you're on a headless machine, try: QMD_LLAMA_GPU=false reflect ingest",
+            "  [ingest] qmd embed timed out after 15 minutes. "
+            "If you're on a headless machine, try: QMD_LLAMA_GPU=false reflect ingest",
             file=sys.stderr,
         )
     except FileNotFoundError as e:
@@ -162,6 +174,7 @@ def _qmd_reindex(verbose=False):
 # ---------------------------------------------------------------------------
 # Subagent helpers
 # ---------------------------------------------------------------------------
+
 
 def _strip_fences(text):
     """Strip markdown code fences if the model wrapped output in them."""
@@ -188,15 +201,23 @@ def _call_subagent(prompt, system_prompt, verbose=False, step_name=""):
         return None
 
     cmd = [
-        "claude", "-p",
-        "--model", MODEL,
-        "--output-format", "json",
-        "--max-turns", "1",
-        "--tools", "",
-        "--max-budget-usd", INGEST_BUDGET,
-        "--setting-sources", "",
+        "claude",
+        "-p",
+        "--model",
+        MODEL,
+        "--output-format",
+        "json",
+        "--max-turns",
+        "1",
+        "--tools",
+        "",
+        "--max-budget-usd",
+        INGEST_BUDGET,
+        "--setting-sources",
+        "",
         "--no-session-persistence",
-        "--system-prompt", system_prompt,
+        "--system-prompt",
+        system_prompt,
     ]
 
     label = f"[ingest/{step_name}]" if step_name else "[ingest]"
@@ -205,7 +226,11 @@ def _call_subagent(prompt, system_prompt, verbose=False, step_name=""):
 
     try:
         result = subprocess.run(
-            cmd, input=prompt, capture_output=True, text=True, timeout=180,
+            cmd,
+            input=prompt,
+            capture_output=True,
+            text=True,
+            timeout=180,
         )
     except subprocess.TimeoutExpired:
         print(f"  {label} timed out", file=sys.stderr)
@@ -319,8 +344,7 @@ def _triage(evidence_doc, index_summary, categories, verbose=False):
 
     # Validate create items have required fields
     plan["create"] = [
-        c for c in plan["create"]
-        if c.get("category") and c.get("slug") and c.get("title")
+        c for c in plan["create"] if c.get("category") and c.get("slug") and c.get("title")
     ]
 
     # Validate update/resolve items have path
@@ -348,7 +372,10 @@ def _validate_triage(plan, categories, wiki_dir, verbose=False):
         for item in plan[key]:
             if not (wiki_dir / item["path"]).exists():
                 if verbose:
-                    print(f"  [ingest/triage] rejected {key}: path not found '{item['path']}'", file=sys.stderr)
+                    print(
+                        f"  [ingest/triage] rejected {key}: path not found '{item['path']}'",
+                        file=sys.stderr,
+                    )
                 continue
             filtered.append(item)
         plan[key] = filtered
@@ -388,7 +415,9 @@ BODY (markdown):
 OUTPUT: Return ONLY the raw page content (frontmatter + body). No commentary. No fences."""
 
 
-def _write_page_content(evidence_doc, action_type, page_info, existing_content, today, verbose=False):
+def _write_page_content(
+    evidence_doc, action_type, page_info, existing_content, today, verbose=False
+):
     """Step 2 (per-page): ask the subagent to write or update a page.
 
     action_type: "create" | "update" | "resolve"
@@ -424,10 +453,7 @@ def _write_page_content(evidence_doc, action_type, page_info, existing_content, 
             f"--- EXISTING PAGE ---\n{existing_block}\n--- END EXISTING PAGE ---\n"
         )
 
-    prompt = (
-        f"{context_block}\n\n"
-        f"Evidence to draw from:\n\n{evidence_doc}"
-    )
+    prompt = f"{context_block}\n\nEvidence to draw from:\n\n{evidence_doc}"
 
     return _call_subagent(prompt, _WRITE_SYSTEM, verbose=verbose, step_name="write")
 
@@ -476,8 +502,12 @@ def _batch_write(evidence_doc, actions, action_type, wiki_dir, today, verbose=Fa
     def _call_one(prep):
         item, action_type_eff, existing = prep
         raw = _write_page_content(
-            evidence_doc, action_type_eff,
-            item, existing, today, verbose=verbose,
+            evidence_doc,
+            action_type_eff,
+            item,
+            existing,
+            today,
+            verbose=verbose,
         )
         return item, raw, action_type_eff
 
@@ -489,7 +519,9 @@ def _batch_write(evidence_doc, actions, action_type, wiki_dir, today, verbose=Fa
                 results.append((item, raw, action_type_eff))
             else:
                 label = item.get("path") or f"{item.get('category')}/{item.get('slug')}"
-                print(f"  [ingest/write] skipped {label} (subagent returned nothing)", file=sys.stderr)
+                print(
+                    f"  [ingest/write] skipped {label} (subagent returned nothing)", file=sys.stderr
+                )
 
     return results
 
@@ -497,6 +529,7 @@ def _batch_write(evidence_doc, actions, action_type, wiki_dir, today, verbose=Fa
 # ---------------------------------------------------------------------------
 # Page path resolution
 # ---------------------------------------------------------------------------
+
 
 def _resolve_page_path(wiki_dir, action_type, item):
     """Compute the filesystem path for a page from a triage action dict.
@@ -518,8 +551,10 @@ def _resolve_page_path(wiki_dir, action_type, item):
 
     try:
         candidate.relative_to(wiki_dir)
-    except ValueError:
-        raise ValueError(f"Path traversal rejected: {item.get('path', item.get('slug', ''))}")
+    except ValueError as err:
+        raise ValueError(
+            f"Path traversal rejected: {item.get('path', item.get('slug', ''))}"
+        ) from err
 
     return candidate
 
@@ -527,6 +562,7 @@ def _resolve_page_path(wiki_dir, action_type, item):
 # ---------------------------------------------------------------------------
 # Parse subagent page output into (fm, body)
 # ---------------------------------------------------------------------------
+
 
 def _parse_page_output(raw, action_type, item, today):
     """Parse raw subagent output into (frontmatter_dict, body_str).
@@ -563,12 +599,20 @@ def _parse_page_output(raw, action_type, item, today):
 # Main command
 # ---------------------------------------------------------------------------
 
+
 def cmd_ingest(args):
     """Ingest new evidence into the wiki."""
     reflect_dir = Path(".reflect")
     wiki_dir = reflect_dir / "wiki"
     verbose = getattr(args, "verbose", False)
     force = getattr(args, "force", False)
+    dry_run = getattr(args, "dry_run", False)
+
+    if dry_run:
+        print(
+            "(dry-run) reflect ingest — triage will run but no pages will be written.",
+            file=sys.stderr,
+        )
 
     # Guard: .reflect/ must exist
     if not reflect_dir.exists():
@@ -602,7 +646,7 @@ def cmd_ingest(args):
             file=sys.stderr,
         )
         print(
-            f"  Wiki updates here will not appear on other branches until merged.",
+            "  Wiki updates here will not appear on other branches until merged.",
             file=sys.stderr,
         )
         print(
@@ -614,7 +658,7 @@ def cmd_ingest(args):
             file=sys.stderr,
         )
         print(
-            f"  Use --force to suppress this warning.",
+            "  Use --force to suppress this warning.",
             file=sys.stderr,
         )
         print(file=sys.stderr)
@@ -699,14 +743,26 @@ def cmd_ingest(args):
 
     if total_ops == 0:
         print("Nothing to do — wiki is already up to date.")
-        _write_last_run(reflect_dir, evidence["latest_checkpoint_id"], evidence["latest_git_sha"])
+        if not dry_run:
+            _write_last_run(
+                reflect_dir, evidence["latest_checkpoint_id"], evidence["latest_git_sha"]
+            )
+        return 0
+
+    if dry_run:
+        for action_type in ("create", "update", "resolve"):
+            for item in plan.get(action_type, []):
+                title = item.get("title") or item.get("slug") or "<untitled>"
+                cat = item.get("category", "?")
+                print(f"  (dry-run) {action_type}: {cat}/{title}")
+        print("(dry-run) no pages written, qmd not re-indexed, .last_run unchanged.")
         return 0
 
     # --- Step 2: Write ---
     print("Step 2/2: Writing wiki pages...", file=sys.stderr)
 
     wiki_dir_abs = wiki_dir.resolve()
-    written = []   # list of (rel_path, action_type) for log
+    written = []  # list of (rel_path, action_type) for log
     errors = []
 
     for action_type in ("create", "update", "resolve"):
@@ -737,7 +793,9 @@ def cmd_ingest(args):
                 write_page(page_path, fm, body)
                 rel = str(page_path.relative_to(wiki_dir_abs))
                 written.append((rel, action_type))
-                verb = {"create": "created", "update": "updated", "resolve": "resolved"}[action_type]
+                verb = {"create": "created", "update": "updated", "resolve": "resolved"}[
+                    action_type
+                ]
                 print(f"  {verb}: {rel}", file=sys.stderr)
             except Exception as e:
                 label = str(page_path)
@@ -746,9 +804,11 @@ def cmd_ingest(args):
 
     # --- Update log.md ---
     if written:
-        summary_line = f"{len(written)} page(s) — {n_create} created, {n_update} updated, {n_resolve} resolved"
+        summary_line = (
+            f"{len(written)} page(s) — {n_create} created, {n_update} updated, {n_resolve} resolved"
+        )
         detail_lines = [f"{verb} {rel}" for rel, verb in written]
-        append_log(wiki_dir, [summary_line] + detail_lines)
+        append_log(wiki_dir, [summary_line, *detail_lines])
 
     # --- Update index.md ---
     if written:

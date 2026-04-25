@@ -1,0 +1,96 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "reflect-cli"
+dynamic = ["version"]
+description = "Repo-owned memory for AI coding agents — persistent knowledge wiki from Entire CLI sessions and git history."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors = [{ name = "reflect contributors" }]
+keywords = ["claude-code", "knowledge-base", "wiki", "ai-agents", "entire-cli"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+]
+
+[project.scripts]
+reflect = "reflect.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/codeyogi911/reflect"
+Repository = "https://github.com/codeyogi911/reflect"
+Issues = "https://github.com/codeyogi911/reflect/issues"
+
+[tool.hatch.version]
+path = "src/reflect/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/reflect"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/reflect",
+    "README.md",
+    "LICENSE",
+    "SPEC.md",
+    "ROADMAP.md",
+    "CLAUDE.md",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "E741",   # ambiguous variable name (allow `l`, `I`, `O` in this codebase)
+    "B008",   # function calls in default args
+    "SIM105", # try/except/pass — keep explicit
+    "SIM108", # collapse if/else to ternary — keep readable
+    "RUF001", # ambiguous unicode in strings (em-dash is intentional)
+    "RUF003", # ambiguous unicode in comments (em-dash is intentional)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+exclude = ["tests/"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra --strict-markers"
+testpaths = ["tests"]
