@@ -110,22 +110,32 @@ def cmd_init(args):
     """One-stop setup: install deps, create .reflect/, register qmd collection."""
     reflect_dir = Path(".reflect")
     migrate = hasattr(args, "migrate") and args.migrate
+    dry_run = getattr(args, "dry_run", False)
+
+    if dry_run:
+        print("(dry-run) reflect init — no filesystem changes will be made.")
 
     # --- Step 1a: qmd (required) ---
-    if not _install_qmd():
+    if dry_run:
+        if shutil.which("qmd") is None:
+            print("(dry-run) would install qmd via npm")
+    elif not _install_qmd():
         return 1
 
     # --- Step 1b: Entire CLI ---
     has_entire = shutil.which("entire") is not None
 
     if not has_entire:
-        installed = _install_entire()
-        if installed:
-            has_entire = True
+        if dry_run:
+            print("(dry-run) would attempt to install Entire CLI")
         else:
-            print("Continuing without Entire CLI (knowledge base will use git-only evidence).")
+            installed = _install_entire()
+            if installed:
+                has_entire = True
+            else:
+                print("Continuing without Entire CLI (knowledge base will use git-only evidence).")
 
-    if has_entire:
+    if has_entire and not dry_run:
         _enable_entire()
 
     # --- Step 2: .reflect/ directory ---
@@ -138,44 +148,57 @@ def cmd_init(args):
         harness = reflect_dir / "harness"
         format_file = reflect_dir / "format.yaml"
         if harness.exists() and not format_file.exists():
-            shutil.copy2(_template_path("format.yaml"), format_file)
-            harness.rename(reflect_dir / "harness.bak")
-            print("Migrated: created format.yaml, backed up harness → harness.bak")
+            if dry_run:
+                print(f"(dry-run) would copy {_template_path('format.yaml')} → {format_file}")
+                print(f"(dry-run) would rename {harness} → {reflect_dir / 'harness.bak'}")
+            else:
+                shutil.copy2(_template_path("format.yaml"), format_file)
+                harness.rename(reflect_dir / "harness.bak")
+                print("Migrated: created format.yaml, backed up harness → harness.bak")
         elif format_file.exists():
             print("Already using format.yaml — nothing to migrate.")
-        return _wire_agents()
+        return _wire_agents(dry_run=dry_run)
 
     if not already_initialized:
-        reflect_dir.mkdir(exist_ok=True)
+        if dry_run:
+            print(f"(dry-run) would create directory {reflect_dir}/")
+            print(f"(dry-run) would copy {_template_path('format.yaml')} → {reflect_dir / 'format.yaml'}")
+            print(f"(dry-run) would copy {_template_path('config.yaml')} → {reflect_dir / 'config.yaml'}")
+        else:
+            reflect_dir.mkdir(exist_ok=True)
 
-        # Copy default format.yaml from template
-        format_file = reflect_dir / "format.yaml"
-        if not format_file.exists():
-            shutil.copy2(_template_path("format.yaml"), format_file)
+            # Copy default format.yaml from template
+            format_file = reflect_dir / "format.yaml"
+            if not format_file.exists():
+                shutil.copy2(_template_path("format.yaml"), format_file)
 
-        # Copy default config from template
-        config = reflect_dir / "config.yaml"
-        if not config.exists():
-            shutil.copy2(_template_path("config.yaml"), config)
+            # Copy default config from template
+            config = reflect_dir / "config.yaml"
+            if not config.exists():
+                shutil.copy2(_template_path("config.yaml"), config)
 
     # --- Step 2b: Wiki (always, unless --no-wiki) ---
     no_wiki = hasattr(args, 'no_wiki') and args.no_wiki
     wiki = not no_wiki
+    wiki_dir = None
     if wiki:
-        from .wiki import init_wiki
-        fmt = None
-        format_file = reflect_dir / "format.yaml"
-        if format_file.exists():
-            from .context import load_format
-            fmt = load_format(reflect_dir)
+        if dry_run:
+            print(f"(dry-run) would initialize wiki at {reflect_dir / 'wiki'}/ with default category dirs")
         else:
-            from .context import DEFAULT_FORMAT
-            fmt = DEFAULT_FORMAT
-        wiki_dir = init_wiki(reflect_dir, fmt["sections"])
-        print(f"Wiki initialized: {wiki_dir}/")
+            from .wiki import init_wiki
+            fmt = None
+            format_file = reflect_dir / "format.yaml"
+            if format_file.exists():
+                from .context import load_format
+                fmt = load_format(reflect_dir)
+            else:
+                from .context import DEFAULT_FORMAT
+                fmt = DEFAULT_FORMAT
+            wiki_dir = init_wiki(reflect_dir, fmt["sections"])
+            print(f"Wiki initialized: {wiki_dir}/")
 
     # --- Step 2c: qmd collection (required) ---
-    if wiki:
+    if wiki and not dry_run and wiki_dir is not None:
         wiki_path = str(wiki_dir.resolve())
         collection_name = _qmd_collection_name()
         ok, _ = _run(["qmd", "collection", "add", wiki_path, "--name", collection_name])
@@ -201,15 +224,20 @@ def cmd_init(args):
         ok, _ = _run(["qmd", "skill", "install", "--yes"], timeout=30)
         if ok:
             print("qmd skill installed: .claude/skills/qmd/")
+    elif wiki and dry_run:
+        print(f"(dry-run) would register qmd collection {_qmd_collection_name()} and seed embeddings")
+        print("(dry-run) would install qmd skill: .claude/skills/qmd/")
 
     # --- Step 3: Install skill + hooks ---
-    _install_skill()
+    _install_skill(dry_run=dry_run)
 
     # --- Step 4: Agent wiring ---
-    _wire_agents()
+    _wire_agents(dry_run=dry_run)
 
     # --- Summary ---
-    if already_initialized:
+    if dry_run:
+        print("(dry-run) no changes were made. Re-run without --dry-run to apply.")
+    elif already_initialized:
         print(".reflect/ already initialized. Setup checked.")
     else:
         print("Initialized .reflect/ — knowledge base ready.")
@@ -229,7 +257,7 @@ def _template_path(name):
     return _package_data_dir() / "templates" / name
 
 
-def _install_skill():
+def _install_skill(dry_run: bool = False):
     """Copy skill/SKILL.md, hooks/, and agents/ into supported agent dirs."""
     data_dir = _package_data_dir()
     skill_src = data_dir / "skill" / "SKILL.md"
@@ -240,6 +268,17 @@ def _install_skill():
         return  # Not running from a reflect repo checkout
 
     skill_dst = Path(".claude") / "skills" / "reflect"
+
+    if dry_run:
+        print(f"(dry-run) would copy {skill_src} → {skill_dst / 'SKILL.md'}")
+        if hooks_src.is_dir():
+            print(f"(dry-run) would copy {hooks_src}/ → {skill_dst / 'hooks'}/")
+        if agents_src.is_dir():
+            agents_dst = Path(".claude") / "agents"
+            for agent_file in agents_src.glob("*.md"):
+                print(f"(dry-run) would copy {agent_file} → {agents_dst / agent_file.name}")
+        return
+
     skill_dst.mkdir(parents=True, exist_ok=True)
 
     # Copy SKILL.md
@@ -267,33 +306,44 @@ def _install_skill():
 
         for agent_file in agents_src.glob("*.md"):
             shutil.copy2(agent_file, agents_dst / agent_file.name)
-        print(f"Agent installed: .claude/agents/")
+        print("Agent installed: .claude/agents/")
 
     print(f"Skill installed: {skill_dst}/SKILL.md")
 
 
 def cmd_upgrade(args):
     """Upgrade reflect CLI, templates, skill, and agents."""
+    dry_run = getattr(args, "dry_run", False)
+
+    if dry_run:
+        print("(dry-run) reflect upgrade — no filesystem changes will be made.")
+
     # --- Step 1: Upgrade CLI itself (via uv if available) ---
-    print("Upgrading reflect CLI...")
-    if shutil.which("uv"):
-        result = subprocess.run(
-            ["uv", "tool", "upgrade", "reflect-cli"],
-            timeout=120,
-        )
-        if result.returncode != 0:
+    if dry_run:
+        if shutil.which("uv"):
+            print("(dry-run) would run: uv tool upgrade reflect-cli")
+        else:
+            print("(dry-run) uv not on PATH; CLI self-upgrade would be skipped.")
+    else:
+        print("Upgrading reflect CLI...")
+        if shutil.which("uv"):
+            result = subprocess.run(
+                ["uv", "tool", "upgrade", "reflect-cli"],
+                timeout=120,
+            )
+            if result.returncode != 0:
+                print(
+                    "uv tool upgrade failed. Continuing with local updates...",
+                    file=sys.stderr,
+                )
+            else:
+                print()
+        else:
             print(
-                "uv tool upgrade failed. Continuing with local updates...",
+                "uv not found; skipping CLI self-upgrade. Reinstall with "
+                "`uv tool install --upgrade reflect-cli` or `pip install --upgrade reflect-cli`.",
                 file=sys.stderr,
             )
-        else:
-            print()
-    else:
-        print(
-            "uv not found; skipping CLI self-upgrade. Reinstall with "
-            "`uv tool install --upgrade reflect-cli` or `pip install --upgrade reflect-cli`.",
-            file=sys.stderr,
-        )
 
     reflect_dir = Path(".reflect")
 
@@ -312,13 +362,17 @@ def cmd_upgrade(args):
     old_content = format_file.read_text() if format_file.exists() else ""
 
     if old_content != new_content:
-        # Back up existing
-        if format_file.exists():
-            backup = reflect_dir / "format.yaml.bak"
-            shutil.copy2(format_file, backup)
-            print(f"Backed up format.yaml → format.yaml.bak")
-        shutil.copy2(template, format_file)
-        print("Updated format.yaml to latest template.")
+        if dry_run:
+            print(f"(dry-run) would back up {format_file} → {format_file}.bak")
+            print(f"(dry-run) would copy {template} → {format_file}")
+        else:
+            # Back up existing
+            if format_file.exists():
+                backup = reflect_dir / "format.yaml.bak"
+                shutil.copy2(format_file, backup)
+                print("Backed up format.yaml → format.yaml.bak")
+            shutil.copy2(template, format_file)
+            print("Updated format.yaml to latest template.")
     else:
         print("format.yaml already up to date.")
 
@@ -326,23 +380,32 @@ def cmd_upgrade(args):
     config_file = reflect_dir / "config.yaml"
     config_template = _template_path("config.yaml")
     if config_template.exists() and not config_file.exists():
-        shutil.copy2(config_template, config_file)
-        print("Added config.yaml from template.")
+        if dry_run:
+            print(f"(dry-run) would copy {config_template} → {config_file}")
+        else:
+            shutil.copy2(config_template, config_file)
+            print("Added config.yaml from template.")
 
     # --- Step 3: skill + hooks + agents ---
-    _install_skill()
+    _install_skill(dry_run=dry_run)
 
-    print("Upgrade complete.")
+    if dry_run:
+        print("(dry-run) no changes were made. Re-run without --dry-run to apply.")
+    else:
+        print("Upgrade complete.")
     return 0
 
 
-def _wire_agents():
+def _wire_agents(dry_run: bool = False):
     """Ensure CLAUDE.md exists and .gitignore is set up."""
     # Claude Code
     claude_md = Path("CLAUDE.md")
     if not claude_md.exists():
-        claude_md.write_text("# CLAUDE.md\n")
-        print("Created CLAUDE.md")
+        if dry_run:
+            print(f"(dry-run) would create {claude_md}")
+        else:
+            claude_md.write_text("# CLAUDE.md\n")
+            print("Created CLAUDE.md")
 
     # .gitignore
     gitignore = Path(".gitignore")

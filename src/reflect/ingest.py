@@ -569,6 +569,10 @@ def cmd_ingest(args):
     wiki_dir = reflect_dir / "wiki"
     verbose = getattr(args, "verbose", False)
     force = getattr(args, "force", False)
+    dry_run = getattr(args, "dry_run", False)
+
+    if dry_run:
+        print("(dry-run) reflect ingest — triage will run but no pages will be written.", file=sys.stderr)
 
     # Guard: .reflect/ must exist
     if not reflect_dir.exists():
@@ -699,7 +703,17 @@ def cmd_ingest(args):
 
     if total_ops == 0:
         print("Nothing to do — wiki is already up to date.")
-        _write_last_run(reflect_dir, evidence["latest_checkpoint_id"], evidence["latest_git_sha"])
+        if not dry_run:
+            _write_last_run(reflect_dir, evidence["latest_checkpoint_id"], evidence["latest_git_sha"])
+        return 0
+
+    if dry_run:
+        for action_type in ("create", "update", "resolve"):
+            for item in plan.get(action_type, []):
+                title = item.get("title") or item.get("slug") or "<untitled>"
+                cat = item.get("category", "?")
+                print(f"  (dry-run) {action_type}: {cat}/{title}")
+        print("(dry-run) no pages written, qmd not re-indexed, .last_run unchanged.")
         return 0
 
     # --- Step 2: Write ---

@@ -55,15 +55,26 @@ Examples:
     init_parser.add_argument(
         "--no-wiki", action="store_true", help="Skip wiki layer initialization"
     )
+    init_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print planned filesystem operations without performing them",
+    )
 
     # reflect upgrade
-    subparsers.add_parser(
+    upgrade_parser = subparsers.add_parser(
         "upgrade",
         help="Upgrade format.yaml, skill, and agents to latest",
         formatter_class=_R,
         epilog="""\
 Examples:
-  reflect upgrade             # pull latest templates and agent definitions""",
+  reflect upgrade             # pull latest templates and agent definitions
+  reflect upgrade --dry-run   # preview template diffs without writing""",
+    )
+    upgrade_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show planned changes without writing files or upgrading the CLI",
     )
 
     # reflect context
@@ -177,6 +188,7 @@ Examples:
         epilog="""\
 Examples:
   reflect ingest              # process new sessions/commits into wiki pages
+  reflect ingest --dry-run    # show planned writes without touching disk
   reflect ingest --verbose    # show subagent progress
   reflect ingest --force      # skip the non-default-branch warning
 
@@ -191,6 +203,11 @@ Branch policy:
     )
     ingest.add_argument(
         "--force", action="store_true", help="Suppress the non-default-branch warning"
+    )
+    ingest.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run the triage step and print the plan without writing pages or re-indexing qmd",
     )
 
     # reflect lint
