@@ -20,9 +20,9 @@ import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from lib.wiki import scan_wiki_index, slugify, read_page, write_page
-from lib.context import load_format
-from lib.sources import has_git, run
+from .wiki import scan_wiki_index, slugify, read_page, write_page
+from .context import load_format
+from .sources import has_git, run
 
 
 # ---------------------------------------------------------------------------

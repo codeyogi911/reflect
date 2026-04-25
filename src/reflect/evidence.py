@@ -12,7 +12,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from lib.sources import run, has_entire, has_git
+from .sources import run, has_entire, has_git
 
 
 def gather_evidence(max_checkpoints=12, max_commits=20, auto_generate=True,

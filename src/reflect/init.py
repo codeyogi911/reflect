@@ -162,14 +162,14 @@ def cmd_init(args):
     no_wiki = hasattr(args, 'no_wiki') and args.no_wiki
     wiki = not no_wiki
     if wiki:
-        from lib.wiki import init_wiki
+        from .wiki import init_wiki
         fmt = None
         format_file = reflect_dir / "format.yaml"
         if format_file.exists():
-            from lib.context import load_format
+            from .context import load_format
             fmt = load_format(reflect_dir)
         else:
-            from lib.context import DEFAULT_FORMAT
+            from .context import DEFAULT_FORMAT
             fmt = DEFAULT_FORMAT
         wiki_dir = init_wiki(reflect_dir, fmt["sections"])
         print(f"Wiki initialized: {wiki_dir}/")
@@ -219,22 +219,22 @@ def cmd_init(args):
     return 0
 
 
-def _reflect_repo_root():
-    """Find the reflect repo root (resolving symlinks from ~/.local/bin)."""
-    return Path(os.path.realpath(__file__)).parent.parent
+def _package_data_dir():
+    """Return the _data/ directory inside the installed reflect package."""
+    return Path(__file__).resolve().parent / "_data"
 
 
 def _template_path(name):
     """Return path to a template file shipped with reflect."""
-    return _reflect_repo_root() / "templates" / name
+    return _package_data_dir() / "templates" / name
 
 
 def _install_skill():
     """Copy skill/SKILL.md, hooks/, and agents/ into supported agent dirs."""
-    repo_root = _reflect_repo_root()
-    skill_src = repo_root / "skill" / "SKILL.md"
-    hooks_src = repo_root / "hooks"
-    agents_src = repo_root / "skill" / "agents"
+    data_dir = _package_data_dir()
+    skill_src = data_dir / "skill" / "SKILL.md"
+    hooks_src = data_dir / "hooks"
+    agents_src = data_dir / "skill" / "agents"
 
     if not skill_src.exists():
         return  # Not running from a reflect repo checkout
@@ -272,21 +272,28 @@ def _install_skill():
     print(f"Skill installed: {skill_dst}/SKILL.md")
 
 
-INSTALL_URL = "https://raw.githubusercontent.com/codeyogi911/reflect/main/install.sh"
-
-
 def cmd_upgrade(args):
     """Upgrade reflect CLI, templates, skill, and agents."""
-    # --- Step 1: Upgrade CLI itself ---
+    # --- Step 1: Upgrade CLI itself (via uv if available) ---
     print("Upgrading reflect CLI...")
-    result = subprocess.run(
-        ["sh", "-c", f"curl -fsSL {INSTALL_URL} | bash"],
-        timeout=120,
-    )
-    if result.returncode != 0:
-        print("CLI upgrade failed. Continuing with local updates...", file=sys.stderr)
+    if shutil.which("uv"):
+        result = subprocess.run(
+            ["uv", "tool", "upgrade", "reflect-cli"],
+            timeout=120,
+        )
+        if result.returncode != 0:
+            print(
+                "uv tool upgrade failed. Continuing with local updates...",
+                file=sys.stderr,
+            )
+        else:
+            print()
     else:
-        print()
+        print(
+            "uv not found; skipping CLI self-upgrade. Reinstall with "
+            "`uv tool install --upgrade reflect-cli` or `pip install --upgrade reflect-cli`.",
+            file=sys.stderr,
+        )
 
     reflect_dir = Path(".reflect")
 

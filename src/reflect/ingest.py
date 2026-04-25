@@ -16,9 +16,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
-from lib.evidence import gather_evidence, build_evidence_document, truncate_evidence
-from lib.context import load_format
-from lib.wiki import (
+from .evidence import gather_evidence, build_evidence_document, truncate_evidence
+from .context import load_format
+from .wiki import (
     slugify,
     build_index_summary,
     read_page,

@@ -13,7 +13,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from lib.evidence import gather_evidence, build_evidence_document, truncate_evidence
+from .evidence import gather_evidence, build_evidence_document, truncate_evidence
 
 
 # ---------------------------------------------------------------------------
@@ -460,7 +460,7 @@ def _deterministic_context(evidence, fmt):
 
 def _briefing_from_wiki(wiki_dir, fmt):
     """Generate context.md from wiki pages (cheap formatting pass, no LLM)."""
-    from lib.wiki import scan_wiki_index, slugify
+    from .wiki import scan_wiki_index, slugify
 
     pages = scan_wiki_index(wiki_dir)
     if not pages:
@@ -600,7 +600,7 @@ def cmd_context(args):
             print(f"context.md updated ({line_count} lines, wiki)")
 
             # Update freshness state so session-start hook doesn't re-trigger
-            from lib.sources import run as _run_cmd
+            from .sources import run as _run_cmd
             git_sha = _run_cmd(["git", "rev-parse", "--short", "HEAD"]) or ""
             _write_last_run(reflect_dir, "", git_sha)
             return 0

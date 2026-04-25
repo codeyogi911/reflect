@@ -9,7 +9,7 @@ import re
 import sys
 from pathlib import Path
 
-from lib.evidence import gather_evidence
+from .evidence import gather_evidence
 
 
 def analyze_context_quality(context_md):
